@@ -1,0 +1,22 @@
+{
+  "name": "remindly",
+  "version": "1.0.0",
+  "description": "A tiny shared wishlist: she adds what she wants (with urgency), you get notified.",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "vapid": "node scripts/vapid.js",
+    "icons": "node scripts/gen-icons.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "web-push": "^3.6.7"
+  }
+}

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Remindly</title>
+  <meta name="description" content="Her wishes, your notifications." />
+  <meta name="theme-color" content="#ff5c8a" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Remindly" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>💌 Remindly</h1>
+    <button id="settings-btn" class="icon-btn" type="button" aria-label="Notifications & settings">⚙️</button>
+  </header>
+
+  <main id="app">
+    <!-- PIN gate -->
+    <section id="pin-view" class="card" hidden>
+      <h2>Enter the PIN</h2>
+      <p class="muted">Ask the person who set this up.</p>
+      <form id="pin-form">
+        <input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="PIN" required />
+        <button type="submit" class="primary">Unlock</button>
+      </form>
+      <p id="pin-error" class="error" hidden>That PIN isn't right.</p>
+    </section>
+
+    <!-- Name gate -->
+    <section id="name-view" class="card" hidden>
+      <h2>What's your name?</h2>
+      <p class="muted">So notifications say who wants what.</p>
+      <form id="name-form">
+        <input id="name-input" type="text" maxlength="40" placeholder="Your name" required />
+        <button type="submit" class="primary">Continue</button>
+      </form>
+    </section>
+
+    <!-- Main -->
+    <section id="main-view" hidden>
+      <form id="add-form" class="card add">
+        <input id="title-input" type="text" maxlength="140" placeholder="I want…" required autocomplete="off" />
+        <div class="urgency-picker" role="radiogroup" aria-label="How badly?">
+          <label><input type="radio" name="urgency" value="low" /><span>🙂 Whenever</span></label>
+          <label><input type="radio" name="urgency" value="medium" checked /><span>🙏 Soon-ish</span></label>
+          <label><input type="radio" name="urgency" value="high" /><span>🔥 Really want</span></label>
+          <label><input type="radio" name="urgency" value="urgent" /><span>🚨 NEED IT</span></label>
+        </div>
+        <details class="more">
+          <summary>Add a note or link</summary>
+          <input id="note-input" type="text" maxlength="500" placeholder="Note (size, colour, why…)" />
+          <input id="link-input" type="url" maxlength="500" placeholder="https://…" />
+        </details>
+        <button type="submit" class="primary">Add wish</button>
+      </form>
+
+      <nav class="tabs" aria-label="Filter">
+        <button type="button" class="tab active" data-tab="open">Open <span id="open-count" class="count">0</span></button>
+        <button type="button" class="tab" data-tab="done">Done <span id="done-count" class="count">0</span></button>
+      </nav>
+
+      <ul id="list" class="list"></ul>
+      <p id="empty" class="empty muted" hidden>Nothing here yet.</p>
+    </section>
+
+    <!-- Settings / notifications -->
+    <section id="settings-view" class="card" hidden>
+      <h2>Notifications</h2>
+      <p class="muted">Turn this on on the phone that should get pinged when a wish is added.</p>
+      <p id="push-status" class="status"></p>
+      <div class="row">
+        <button id="push-btn" type="button" class="primary">🔔 Notify me on this device</button>
+        <button id="test-btn" type="button">Send test</button>
+      </div>
+      <p id="ios-hint" class="hint" hidden>
+        On iPhone: tap <strong>Share → Add to Home Screen</strong>, then open Remindly from the home screen and press the button again.
+      </p>
+      <p id="telegram-status" class="status"></p>
+
+      <h2>You</h2>
+      <p class="muted">Signed in as <strong id="me-name"></strong>.</p>
+      <div class="row">
+        <button id="change-name-btn" type="button">Change name</button>
+        <button id="logout-btn" type="button">Forget PIN</button>
+      </div>
+      <button id="close-settings-btn" type="button" class="link">← Back to the list</button>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
