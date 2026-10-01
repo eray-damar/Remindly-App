@@ -1,6 +1,6 @@
 /* Remindly service worker: receives push notifications and keeps the app shell available offline. */
-const CACHE = "remindly-v3";
-const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png"];
+const CACHE = "remindly-v5";
+const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/icons.js", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -27,22 +27,26 @@
 
   <!-- PIN gate -->
   <section id="pin-view" class="gate" hidden>
-    <span class="pill">Private</span>
+    <span class="pill"><i data-icon="lock" data-size="13"></i> Private</span>
     <h1>Enter the PIN</h1>
     <p class="lead">Ask the person who set this up.</p>
     <form id="pin-form" class="card">
       <input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="PIN" required />
-      <button type="submit" class="primary">Unlock</button>
+      <button type="submit" class="primary"><i data-icon="key-round" data-size="18"></i> Unlock</button>
       <p id="pin-error" class="error" hidden>That PIN isn't right.</p>
     </form>
   </section>
 
-  <!-- Name gate -->
+  <!-- Who are you -->
   <section id="name-view" class="gate" hidden>
-    <span class="pill">Hello</span>
-    <h1>What's your name?</h1>
-    <p class="lead">So notifications say who wants what.</p>
+    <span class="pill"><i data-icon="users-round" data-size="13"></i> Two of you</span>
+    <h1>Who are you?</h1>
+    <p class="lead">Each of you gets notified about what the other adds.</p>
     <form id="name-form" class="card">
+      <div class="role-picker" role="radiogroup" aria-label="Who are you?">
+        <label><input type="radio" name="role" value="her" required /><span><i data-icon="heart" data-size="22"></i>Her</span></label>
+        <label><input type="radio" name="role" value="him" required /><span><i data-icon="heart" data-size="22"></i>Him</span></label>
+      </div>
       <input id="name-input" type="text" maxlength="40" placeholder="Your name" required />
       <button type="submit" class="primary">Continue</button>
     </form>
@@ -52,7 +56,19 @@
   <section id="main-view" hidden>
     <span id="hero-pill" class="pill">Wishlist</span>
     <h1 id="hero-title">Wishes</h1>
-    <p id="hero-lead" class="lead">Everything she's hoping for, sorted by how badly.</p>
+    <p id="hero-lead" class="lead"></p>
+
+    <div class="filters">
+      <div class="segmented" id="status-seg" role="tablist" aria-label="Status">
+        <button type="button" class="active" data-status="open">Open</button>
+        <button type="button" data-status="done">Done</button>
+      </div>
+      <div class="segmented" id="who-seg" role="tablist" aria-label="Whose">
+        <button type="button" class="active" data-who="all">Both</button>
+        <button type="button" data-who="her">Hers</button>
+        <button type="button" data-who="him">His</button>
+      </div>
+    </div>
 
     <div class="card progress">
       <div class="progress-row">
@@ -71,17 +87,17 @@
 
   <!-- Settings -->
   <section id="settings-view" hidden>
-    <span class="pill">You</span>
+    <span class="pill"><i data-icon="user-round" data-size="13"></i> You</span>
     <h1>Settings</h1>
-    <p class="lead">Signed in as <strong id="me-name"></strong>.</p>
+    <p class="lead">Signed in as <strong id="me-name"></strong> (<span id="me-role"></span>).</p>
 
     <div class="card">
       <h2>Notifications</h2>
       <p class="muted">Turn this on on the phone that should get pinged when a wish is added.</p>
       <p id="push-status" class="status"></p>
-      <div class="row">
-        <button id="push-btn" type="button" class="primary">Notify me on this device</button>
-        <button id="test-btn" type="button" class="ghost">Send test</button>
+      <div class="row stack">
+        <button id="push-btn" type="button" class="primary"><i data-icon="bell" data-size="18"></i> <span>Notify me on this device</span></button>
+        <button id="test-btn" type="button" class="ghost"><i data-icon="send" data-size="18"></i> Send test</button>
       </div>
       <p id="ios-hint" class="hint" hidden>
         On iPhone: tap <strong>Share → Add to Home Screen</strong>, then open Remindly from the home screen and press the button again.
@@ -91,30 +107,34 @@
 
     <div class="card">
       <h2>Account</h2>
-      <div class="row">
-        <button id="change-name-btn" type="button" class="ghost">Change name</button>
-        <button id="logout-btn" type="button" class="ghost">Forget PIN</button>
+      <div class="row stack">
+        <button id="change-name-btn" type="button" class="ghost"><i data-icon="user-round" data-size="18"></i> Change who I am</button>
+        <button id="logout-btn" type="button" class="ghost"><i data-icon="log-out" data-size="18"></i> Forget PIN</button>
       </div>
     </div>
   </section>
 
   <!-- Floating add button -->
   <button id="fab" class="fab" type="button" aria-label="Add a wish" hidden>
-    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    <i data-icon="plus" data-size="28"></i>
   </button>
 
   <!-- Tab bar -->
   <nav id="tabbar" class="tabbar" aria-label="Sections" hidden>
-    <button type="button" class="tab active" data-tab="open">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-9.5-9.3C1.2 8.3 3.6 5 7 5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.8 3.3 4.5 6.7C19.5 16.4 12 21 12 21z"/></svg>
+    <button type="button" class="tab active" data-tab="wish">
+      <i data-icon="heart" data-size="24"></i>
       <span>Wishes</span>
     </button>
-    <button type="button" class="tab" data-tab="done">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
-      <span>Granted</span>
+    <button type="button" class="tab" data-tab="travel">
+      <i data-icon="plane" data-size="24"></i>
+      <span>Travel</span>
+    </button>
+    <button type="button" class="tab" data-tab="home">
+      <i data-icon="armchair" data-size="24"></i>
+      <span>Home</span>
     </button>
     <button type="button" class="tab" data-tab="settings">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="3"/></svg>
+      <i data-icon="settings-2" data-size="24"></i>
       <span>Settings</span>
     </button>
   </nav>
@@ -124,20 +144,25 @@
     <div class="sheet-backdrop" data-close></div>
     <form id="add-form" class="sheet-panel" aria-label="Add a wish">
       <div class="grabber"></div>
-      <h2>New wish</h2>
+      <h2 id="sheet-title">New wish</h2>
+      <div class="segmented" id="cat-seg" role="radiogroup" aria-label="Category">
+        <label><input type="radio" name="category" value="wish" checked /><span><i data-icon="heart" data-size="15"></i> Wish</span></label>
+        <label><input type="radio" name="category" value="travel" /><span><i data-icon="plane" data-size="15"></i> Travel</span></label>
+        <label><input type="radio" name="category" value="home" /><span><i data-icon="armchair" data-size="15"></i> Home</span></label>
+      </div>
       <input id="title-input" type="text" maxlength="140" placeholder="I want…" required autocomplete="off" />
       <div class="label">How badly?</div>
       <div class="urgency-picker" role="radiogroup" aria-label="How badly?">
-        <label><input type="radio" name="urgency" value="low" /><span>🙂 Whenever</span></label>
-        <label><input type="radio" name="urgency" value="medium" checked /><span>🙏 Soon-ish</span></label>
-        <label><input type="radio" name="urgency" value="high" /><span>🔥 Really want</span></label>
-        <label><input type="radio" name="urgency" value="urgent" /><span>🚨 NEED IT</span></label>
+        <label><input type="radio" name="urgency" value="low" /><span><i data-icon="leaf" data-size="16"></i> Whenever</span></label>
+        <label><input type="radio" name="urgency" value="medium" checked /><span><i data-icon="clock" data-size="16"></i> Soon-ish</span></label>
+        <label><input type="radio" name="urgency" value="high" /><span><i data-icon="flame" data-size="16"></i> Really want</span></label>
+        <label><input type="radio" name="urgency" value="urgent" /><span><i data-icon="siren" data-size="16"></i> NEED IT</span></label>
       </div>
       <input id="note-input" type="text" maxlength="500" placeholder="Note (size, colour, why…)" />
       <input id="link-input" type="url" maxlength="500" placeholder="Link (optional)" />
       <div class="row">
-        <button type="button" class="ghost" data-close>Cancel</button>
-        <button type="submit" class="primary">Add wish</button>
+        <button type="button" class="ghost" data-close><i data-icon="x" data-size="18"></i> Cancel</button>
+        <button type="submit" class="primary"><i data-icon="plus" data-size="18"></i> <span id="sheet-submit">Add wish</span></button>
       </div>
     </form>
   </div>

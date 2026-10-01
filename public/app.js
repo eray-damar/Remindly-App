@@ -1,4 +1,16 @@
 /* Remindly front end. Plain JS, no build step. */
+import { icon, mountIcons } from "/icons.js";
+
+// Lucide icon per urgency level (the server keeps emoji for notification text).
+const URGENCY_ICON = { low: "leaf", medium: "clock", high: "flame", urgent: "siren" };
+
+// Copy per category. Travel and home are shared idea lists, not shopping.
+const CATEGORY_UI = {
+  wish: { icon: "heart", title: "Wishes", pill: "Wishlist", lead: "Things we're hoping for, sorted by how badly.", placeholder: "I want…", sheet: "New wish", submit: "Add wish", progress: "Wishes granted", unit: "wish", units: "wishes", done: "Got it", doneVerb: "granted", emptyOpen: "No open wishes. Tap + to add one.", emptyDone: "Nothing granted yet." },
+  travel: { icon: "plane", title: "Travel", pill: "Places & trips", lead: "Where we want to go, sooner or later.", placeholder: "Somewhere we should go…", sheet: "New travel idea", submit: "Add idea", progress: "Places visited", unit: "idea", units: "ideas", done: "Been there", doneVerb: "visited", emptyOpen: "No travel ideas yet. Tap + to dream a little.", emptyDone: "No trips ticked off yet." },
+  home: { icon: "armchair", title: "Home", pill: "Furniture & home", lead: "Ideas for our place, big and small.", placeholder: "Something for our place…", sheet: "New home idea", submit: "Add idea", progress: "Home ideas done", unit: "idea", units: "ideas", done: "Done", doneVerb: "done", emptyOpen: "No home ideas yet. Tap + to add one.", emptyDone: "Nothing done yet." },
+};
+const ROLE_LABEL = { her: "Her", him: "Him" };
 
 const $ = (sel) => document.querySelector(sel);
 const views = {
@@ -11,9 +23,12 @@ const views = {
 const state = {
   config: null,
   items: [],
-  tab: "open", // open | done | settings
+  tab: "wish", // wish | travel | home | settings
+  status: "open", // open | done
+  who: "all", // all | her | him
   pin: localStorage.getItem("remindly.pin") || "",
   name: localStorage.getItem("remindly.name") || "",
+  role: localStorage.getItem("remindly.role") || "",
   pushSubscription: null,
 };
 
@@ -75,24 +90,28 @@ function escapeHtml(s) {
 // ---------- rendering ----------
 function render() {
   const U = state.config.urgency;
-  const open = state.items.filter((i) => !i.done);
-  const done = state.items.filter((i) => i.done);
-  const total = state.items.length;
+  const ui = CATEGORY_UI[state.tab] || CATEGORY_UI.wish;
+  const inCat = state.items.filter((i) => (i.category || "wish") === state.tab);
+  const mine = state.who === "all" ? inCat : inCat.filter((i) => i.role === state.who);
+  const open = mine.filter((i) => !i.done);
+  const done = mine.filter((i) => i.done);
+  const total = mine.length;
   const pct = total ? Math.round((done.length / total) * 100) : 0;
   const urgentCount = open.filter((i) => U[i.urgency].rank >= U.high.rank).length;
+  const isDone = state.status === "done";
 
   // Hero + progress card
-  const isDone = state.tab === "done";
-  $("#hero-pill").textContent = isDone
-    ? `${done.length} granted`
-    : open.length === 0 ? "All caught up" : `${open.length} open · ${urgentCount} burning`;
-  $("#hero-title").textContent = isDone ? "Granted" : "Wishes";
-  $("#hero-lead").textContent = isDone
-    ? "Everything that's already been taken care of."
-    : "Everything she's hoping for, sorted by how badly.";
-  $("#progress-sub").textContent = `${done.length} of ${total} wish${total === 1 ? "" : "es"}`;
+  $("#hero-pill").innerHTML = `${icon(ui.icon, "13px")} ${
+    open.length === 0 ? ui.pill : `${open.length} open · ${urgentCount} burning`
+  }`;
+  $("#hero-title").textContent = ui.title;
+  $("#hero-lead").textContent = ui.lead;
+  $(".progress-title").textContent = ui.progress;
+  $("#progress-sub").textContent = `${done.length} of ${total} ${total === 1 ? ui.unit : ui.units}`;
   $("#progress-pct").textContent = `${pct}%`;
   $("#progress-bar").style.width = `${pct}%`;
+  document.querySelectorAll("#status-seg button").forEach((b) => b.classList.toggle("active", b.dataset.status === state.status));
+  document.querySelectorAll("#who-seg button").forEach((b) => b.classList.toggle("active", b.dataset.who === state.who));
 
   const rows = (isDone ? done : open).slice().sort((a, b) => {
     if (isDone) return new Date(b.doneAt || b.createdAt) - new Date(a.doneAt || a.createdAt);
@@ -104,29 +123,31 @@ function render() {
     .map((item) => {
       const u = U[item.urgency];
       const options = Object.entries(U)
-        .map(([key, v]) => `<option value="${key}" ${key === item.urgency ? "selected" : ""}>${v.emoji} ${escapeHtml(v.label)}</option>`)
+        .map(([key, v]) => `<option value="${key}" ${key === item.urgency ? "selected" : ""}>${escapeHtml(v.label)}</option>`)
         .join("");
       return `
       <li class="item ${item.urgency} ${item.done ? "done" : ""}" id="item-${item.id}" data-id="${item.id}">
         <div class="head">
           <div class="title">${escapeHtml(item.title)}</div>
-          <span class="badge ${item.urgency}">${u.emoji} ${escapeHtml(u.label)}</span>
+          <span class="badge ${item.urgency}">${icon(URGENCY_ICON[item.urgency], "14px")} ${escapeHtml(u.label)}</span>
         </div>
         ${item.note ? `<p class="note">${escapeHtml(item.note)}</p>` : ""}
-        ${item.link ? `<a class="link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">↗ ${escapeHtml(item.link.replace(/^https?:\/\//, "").slice(0, 60))}</a>` : ""}
-        <div class="meta">${item.addedBy ? `${escapeHtml(item.addedBy)} · ` : ""}${item.done && item.doneAt ? `granted ${timeAgo(item.doneAt)}` : `added ${timeAgo(item.createdAt)}`}</div>
+        ${item.link ? `<a class="link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${icon("external-link", "14px")} ${escapeHtml(item.link.replace(/^https?:\/\//, "").slice(0, 60))}</a>` : ""}
+        <div class="meta"><span class="who ${item.role || ""}">${escapeHtml(item.addedBy || ROLE_LABEL[item.role] || "Someone")}</span> · ${item.done && item.doneAt ? `${ui.doneVerb} ${timeAgo(item.doneAt)}` : `added ${timeAgo(item.createdAt)}`}</div>
         <div class="actions">
-          <button type="button" class="${item.done ? "" : "got"}" data-action="toggle">${item.done ? "Reopen" : "✓ Got it"}</button>
+          <button type="button" class="${item.done ? "" : "got"}" data-action="toggle">${item.done ? icon("rotate-ccw", "16px") + " Reopen" : icon("check", "16px") + " " + ui.done}</button>
           ${item.done ? "" : `<select data-action="urgency" aria-label="Change urgency">${options}</select>`}
           <span class="spacer"></span>
-          <button type="button" class="danger" data-action="delete" aria-label="Delete">🗑</button>
+          <button type="button" class="danger" data-action="delete" aria-label="Delete">${icon("trash-2", "17px")}</button>
         </div>
       </li>`;
     })
     .join("");
   const empty = $("#empty");
   empty.hidden = rows.length > 0;
-  empty.textContent = isDone ? "Nothing granted yet." : "No open wishes. Tap + to add one.";
+  empty.innerHTML = isDone
+    ? `${icon("party-popper", "28px")}<br>${ui.emptyDone}`
+    : `${icon("sparkles", "28px")}<br>${ui.emptyOpen}`;
 }
 
 async function refresh() {
@@ -182,12 +203,12 @@ async function updatePushStatus() {
   state.pushSubscription = await reg.pushManager.getSubscription();
   btn.disabled = false;
   if (state.pushSubscription) {
-    status.textContent = "✓ This device gets notified for every new wish.";
-    btn.textContent = "Stop notifying this device";
+    status.textContent = "This device gets notified for every new wish.";
+    btn.innerHTML = `${icon("bell-off", "18px")} <span>Stop notifying this device</span>`;
     btn.classList.replace("primary", "ghost");
   } else {
     status.textContent = "This device is not receiving notifications yet.";
-    btn.textContent = "Notify me on this device";
+    btn.innerHTML = `${icon("bell-ring", "18px")} <span>Notify me on this device</span>`;
     btn.classList.replace("ghost", "primary");
   }
 }
@@ -211,7 +232,7 @@ async function togglePush() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(state.config.vapidPublicKey),
       });
-      await api("/subscribe", { method: "POST", body: sub.toJSON() });
+      await api("/subscribe", { method: "POST", body: { ...sub.toJSON(), role: state.role } });
       toast("You'll be notified here");
     }
   } catch (err) {
@@ -223,7 +244,18 @@ async function togglePush() {
 }
 
 // ---------- add sheet ----------
+function syncSheetCategory() {
+  const cat = $("#add-form").category.value;
+  const ui = CATEGORY_UI[cat];
+  $("#sheet-title").textContent = ui.sheet;
+  $("#sheet-submit").textContent = ui.submit;
+  $("#title-input").placeholder = ui.placeholder;
+}
+
 function openSheet() {
+  const form = $("#add-form");
+  form.category.value = CATEGORY_UI[state.tab] ? state.tab : "wish";
+  syncSheetCategory();
   $("#sheet").hidden = false;
   document.body.style.overflow = "hidden";
   setTimeout(() => $("#title-input").focus(), 50);
@@ -250,11 +282,16 @@ $("#pin-form").addEventListener("submit", async (e) => {
 
 $("#name-form").addEventListener("submit", (e) => {
   e.preventDefault();
+  const form = e.currentTarget;
   state.name = $("#name-input").value.trim();
-  if (!state.name) return;
+  state.role = form.role.value;
+  if (!state.name || !state.role) return;
   localStorage.setItem("remindly.name", state.name);
+  localStorage.setItem("remindly.role", state.role);
   boot();
 });
+
+$("#cat-seg").addEventListener("change", syncSheetCategory);
 
 $("#fab").addEventListener("click", openSheet);
 $("#sheet").addEventListener("click", (e) => {
@@ -271,9 +308,11 @@ $("#add-form").addEventListener("submit", async (e) => {
   const body = {
     title: $("#title-input").value,
     urgency: form.urgency.value,
+    category: form.category.value,
     note: $("#note-input").value,
     link: $("#link-input").value,
     addedBy: state.name,
+    role: state.role,
   };
   btn.disabled = true;
   try {
@@ -281,7 +320,9 @@ $("#add-form").addEventListener("submit", async (e) => {
     state.items.unshift(item);
     form.reset();
     closeSheet();
-    state.tab = "open";
+    state.tab = item.category;
+    state.status = "open";
+    if (state.who !== "all") state.who = "all";
     setActiveTab();
     render();
     document.getElementById(`item-${item.id}`)?.classList.add("flash");
@@ -304,7 +345,7 @@ $("#list").addEventListener("click", async (e) => {
       const updated = await api(`/items/${id}`, { method: "PATCH", body: { done: !item.done } });
       Object.assign(item, updated);
       render();
-      toast(updated.done ? "🎉 Wish granted" : "Reopened");
+      toast(updated.done ? `🎉 ${CATEGORY_UI[state.tab]?.done || "Done"}!` : "Reopened");
     } else if (btn.dataset.action === "delete") {
       if (!confirm(`Delete "${item.title}"?`)) return;
       await api(`/items/${id}`, { method: "DELETE" });
@@ -340,19 +381,34 @@ document.querySelectorAll(".tabbar .tab").forEach((t) =>
     setActiveTab();
     if (state.tab === "settings") {
       $("#me-name").textContent = state.name;
+      $("#me-role").textContent = ROLE_LABEL[state.role] || "no side picked";
       show("settings");
       await updatePushStatus();
     } else {
+      state.status = "open";
       show("main");
       render();
     }
   })
 );
 
+$("#status-seg").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-status]");
+  if (!b) return;
+  state.status = b.dataset.status;
+  render();
+});
+$("#who-seg").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-who]");
+  if (!b) return;
+  state.who = b.dataset.who;
+  render();
+});
+
 $("#push-btn").addEventListener("click", togglePush);
 $("#test-btn").addEventListener("click", async () => {
   try {
-    const r = await api("/test-notification", { method: "POST", body: {} });
+    const r = await api("/test-notification", { method: "POST", body: { role: state.role } });
     toast(`Test sent to ${r.devices} device${r.devices === 1 ? "" : "s"}${r.telegram ? " + Telegram" : ""}`);
   } catch (err) {
     toast(err.message);
@@ -360,6 +416,8 @@ $("#test-btn").addEventListener("click", async () => {
 });
 $("#change-name-btn").addEventListener("click", () => {
   $("#name-input").value = state.name;
+  const r = $("#name-form").querySelector(`input[name=role][value="${state.role}"]`);
+  if (r) r.checked = true;
   show("name");
 });
 $("#logout-btn").addEventListener("click", () => {
@@ -378,8 +436,8 @@ async function boot() {
     state.config = await fetch("/api/config").then((r) => r.json());
   }
   if (state.config.pinRequired && !state.pin) return show("pin");
-  if (!state.name) return show("name");
-  state.tab = state.tab === "settings" ? "open" : state.tab;
+  if (!state.name || !state.role) return show("name");
+  state.tab = state.tab === "settings" ? "wish" : state.tab;
   setActiveTab();
   show("main");
   await refresh();
@@ -395,6 +453,7 @@ async function boot() {
   }
 }
 
+mountIcons();
 getSwRegistration().catch((err) => console.warn("SW registration failed", err));
 boot().catch((err) => {
   console.error(err);

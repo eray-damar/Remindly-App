@@ -29,6 +29,15 @@ if (PUSH_ENABLED) {
 }
 const TELEGRAM_ENABLED = Boolean(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID);
 
+export const CATEGORIES = {
+  wish: { label: "Wishes", emoji: "🎁", verb: "wants", doneLabel: "Got it" },
+  travel: { label: "Travel ideas", emoji: "✈️", verb: "wants to go", doneLabel: "Been there" },
+  home: { label: "Home ideas", emoji: "🛋️", verb: "wants for home", doneLabel: "Got it" },
+};
+
+export const ROLES = ["her", "him"];
+const otherRole = (role) => (role === "her" ? "him" : role === "him" ? "her" : null);
+
 export const URGENCY = {
   low: { rank: 0, label: "Whenever", emoji: "🙂" },
   medium: { rank: 1, label: "Soon-ish", emoji: "🙏" },
@@ -63,12 +72,15 @@ const saveItems = () => saveJson("items.json", items);
 const saveSubscriptions = () => saveJson("subscriptions.json", subscriptions);
 
 // ---------- notifications ----------
-async function sendPush(payload) {
+async function sendPush(payload, toRole = null) {
   if (!PUSH_ENABLED || subscriptions.length === 0) return;
   const body = JSON.stringify(payload);
   const dead = new Set();
+  // A device subscribed as "her" only hears about what "him" adds, and vice versa.
+  // Devices that never picked a side get everything.
+  const targets = subscriptions.filter((s) => !toRole || !s.role || s.role === toRole);
   await Promise.all(
-    subscriptions.map(async (sub) => {
+    targets.map(async (sub) => {
       try {
         await webpush.sendNotification(sub, body, { TTL: 60 * 60 * 24 });
       } catch (err) {
@@ -100,9 +112,9 @@ async function sendTelegram(text) {
   }
 }
 
-function notify({ title, body, url = "/", tag }) {
+function notify({ title, body, url = "/", tag, toRole = null }) {
   // Fire and forget: the API response should not wait on push servers.
-  sendPush({ title, body, url, tag }).catch(() => {});
+  sendPush({ title, body, url, tag }, toRole).catch(() => {});
   sendTelegram(`${title}\n${body}`).catch(() => {});
 }
 
@@ -113,6 +125,12 @@ function describe(item) {
   return parts.join(" · ");
 }
 
+function itemTitle(item, prefix = "") {
+  const c = CATEGORIES[item.category] || CATEGORIES.wish;
+  const who = item.addedBy || (item.role === "her" ? "She" : item.role === "him" ? "He" : "Someone");
+  return `${c.emoji} ${prefix}${who} ${c.verb}: ${item.title}`;
+}
+
 // ---------- daily reminder ----------
 let lastReminderDay = null;
 function maybeSendDailyReminder() {
@@ -121,16 +139,24 @@ function maybeSendDailyReminder() {
   const today = now.toDateString();
   if (now.getHours() !== REMINDER_HOUR || lastReminderDay === today) return;
   lastReminderDay = today;
-  const open = items.filter((i) => !i.done && URGENCY[i.urgency].rank >= URGENCY.high.rank);
-  if (open.length === 0) return;
-  const lines = open
-    .sort((a, b) => URGENCY[b.urgency].rank - URGENCY[a.urgency].rank)
-    .map((i) => `${URGENCY[i.urgency].emoji} ${i.title}`);
-  notify({
-    title: `${open.length} wish${open.length === 1 ? "" : "es"} still waiting`,
-    body: lines.slice(0, 5).join("\n") + (lines.length > 5 ? `\n…and ${lines.length - 5} more` : ""),
-    tag: "daily-reminder",
-  });
+  const burning = items.filter((i) => !i.done && URGENCY[i.urgency].rank >= URGENCY.high.rank);
+  if (burning.length === 0) return;
+  // Each side is reminded about what the *other* side is still waiting for.
+  const sides = [...new Set(subscriptions.map((s) => s.role || null))];
+  if (sides.length === 0) sides.push(null);
+  for (const side of sides) {
+    const open = burning.filter((i) => !side || !i.role || i.role === otherRole(side));
+    if (open.length === 0) continue;
+    const lines = open
+      .sort((a, b) => URGENCY[b.urgency].rank - URGENCY[a.urgency].rank)
+      .map((i) => `${(CATEGORIES[i.category] || CATEGORIES.wish).emoji} ${i.title}`);
+    notify({
+      title: `${open.length} wish${open.length === 1 ? "" : "es"} still waiting`,
+      body: lines.slice(0, 5).join("\n") + (lines.length > 5 ? `\n…and ${lines.length - 5} more` : ""),
+      tag: "daily-reminder",
+      toRole: side,
+    });
+  }
 }
 setInterval(maybeSendDailyReminder, 60 * 1000).unref();
 
@@ -147,6 +173,8 @@ app.get("/api/config", (_req, res) => {
     vapidPublicKey: PUSH_ENABLED ? VAPID_PUBLIC_KEY : null,
     telegramEnabled: TELEGRAM_ENABLED,
     urgency: URGENCY,
+    categories: CATEGORIES,
+    roles: ROLES,
   });
 });
 
@@ -159,7 +187,7 @@ app.use("/api", (req, res, next) => {
 });
 
 app.get("/api/items", (_req, res) => {
-  res.json(items);
+  res.json(items.map((i) => ({ category: "wish", role: "", ...i })));
 });
 
 app.post("/api/items", (req, res) => {
@@ -167,9 +195,13 @@ app.post("/api/items", (req, res) => {
   const note = String(req.body?.note ?? "").trim().slice(0, 500);
   const link = String(req.body?.link ?? "").trim().slice(0, 500);
   const urgency = String(req.body?.urgency ?? "medium");
+  const category = String(req.body?.category ?? "wish");
+  const role = String(req.body?.role ?? "");
   const addedBy = String(req.body?.addedBy ?? "").trim().slice(0, 40);
   if (!title) return res.status(400).json({ error: "title is required" });
   if (!URGENCY[urgency]) return res.status(400).json({ error: "unknown urgency" });
+  if (!CATEGORIES[category]) return res.status(400).json({ error: "unknown category" });
+  if (role && !ROLES.includes(role)) return res.status(400).json({ error: "unknown role" });
   if (link && !/^https?:\/\//i.test(link)) return res.status(400).json({ error: "link must start with http(s)://" });
 
   const item = {
@@ -178,6 +210,8 @@ app.post("/api/items", (req, res) => {
     note,
     link,
     urgency,
+    category,
+    role,
     addedBy,
     done: false,
     createdAt: new Date().toISOString(),
@@ -186,12 +220,12 @@ app.post("/api/items", (req, res) => {
   items.unshift(item);
   saveItems();
 
-  const who = addedBy ? `${addedBy} wants` : "New wish:";
   notify({
-    title: `${URGENCY[urgency].emoji} ${who} ${title}`,
+    title: itemTitle(item),
     body: describe(item),
     url: `/#item-${item.id}`,
     tag: `item-${item.id}`,
+    toRole: otherRole(role),
   });
   res.status(201).json(item);
 });
@@ -210,10 +244,11 @@ app.patch("/api/items/:id", (req, res) => {
     item.urgency = urgency;
     if (bumped && !item.done) {
       notify({
-        title: `${URGENCY[urgency].emoji} Bumped: ${item.title}`,
+        title: itemTitle(item, `${URGENCY[urgency].emoji} Bumped · `),
         body: describe(item),
         url: `/#item-${item.id}`,
         tag: `item-${item.id}`,
+        toRole: otherRole(item.role),
       });
     }
   }
@@ -237,10 +272,14 @@ app.post("/api/subscribe", (req, res) => {
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
     return res.status(400).json({ error: "invalid subscription" });
   }
-  if (!subscriptions.some((s) => s.endpoint === sub.endpoint)) {
-    subscriptions.push({ endpoint: sub.endpoint, keys: sub.keys, expirationTime: sub.expirationTime ?? null });
-    saveSubscriptions();
+  const role = ROLES.includes(sub.role) ? sub.role : "";
+  const existing = subscriptions.find((s) => s.endpoint === sub.endpoint);
+  if (existing) {
+    existing.role = role; // re-subscribing updates which side this device is on
+  } else {
+    subscriptions.push({ endpoint: sub.endpoint, keys: sub.keys, expirationTime: sub.expirationTime ?? null, role });
   }
+  saveSubscriptions();
   res.status(201).json({ ok: true, count: subscriptions.length });
 });
 
@@ -251,9 +290,12 @@ app.delete("/api/subscribe", (req, res) => {
   res.status(204).end();
 });
 
-app.post("/api/test-notification", (_req, res) => {
-  notify({ title: "💌 Remindly is working", body: "You'll get a ping like this for every new wish.", tag: "test" });
-  res.json({ ok: true, push: PUSH_ENABLED, telegram: TELEGRAM_ENABLED, devices: subscriptions.length });
+app.post("/api/test-notification", (req, res) => {
+  // The test goes to the caller's own side so they see it on the phone in their hand.
+  const role = ROLES.includes(req.body?.role) ? req.body.role : null;
+  notify({ title: "💌 Remindly is working", body: "You'll get a ping like this for every new wish.", tag: "test", toRole: role });
+  const devices = subscriptions.filter((s) => !role || !s.role || s.role === role).length;
+  res.json({ ok: true, push: PUSH_ENABLED, telegram: TELEGRAM_ENABLED, devices });
 });
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "not found" }));

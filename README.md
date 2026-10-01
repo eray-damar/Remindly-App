@@ -1,10 +1,12 @@
 # 💌 Remindly
 
-A tiny shared wishlist. She adds the things she wants and how badly she wants them; your phone gets a notification.
+A tiny app for two. Each of you picks a side (**Her** or **Him**) when you open it, adds the things you want and how badly, and the *other* phone gets a notification.
 
+- Three lists: 🎁 **Wishes** (things to buy), ✈️ **Travel** (places and trips) and 🛋️ **Home** (furniture and ideas for your place). Travel and Home are idea lists, not shopping.
 - Four urgency levels: 🙂 Whenever · 🙏 Soon-ish · 🔥 Really want · 🚨 NEED IT
-- Optional note and link per wish, "Got it" to tick things off, delete when done
-- Notifications on your phone (Web Push, works as a home-screen app on Android and iPhone)
+- Filter each list by Open / Done and Both / Hers / His
+- Optional note and link per item, "Got it" / "Been there" / "Done" to tick things off
+- Notifications go to the other side only: her phone hears about his additions, his about hers (Web Push, works as a home-screen app on Android and iPhone)
 - Optional Telegram notifications too
 - Optional daily reminder of open 🔥/🚨 wishes
 - One shared PIN, no accounts, no database: everything lives in two JSON files
@@ -42,15 +44,17 @@ Push notifications need HTTPS, so host it somewhere with a free TLS certificate.
 
 4. Attach a small persistent disk mounted at `DATA_DIR`.
 
-## Set up your phone
+## Set up both phones
 
-1. Open the app URL, enter the PIN and your name.
+Do this on each phone:
+
+1. Open the app URL, enter the PIN, pick **Her** or **Him**, and type your name.
 2. **iPhone:** Share → *Add to Home Screen*, then open Remindly from the home screen. (iOS only allows notifications for installed web apps.)
    **Android:** Chrome will offer *Install app*; either way works.
-3. Tap ⚙️ → **Notify me on this device** → allow notifications.
+3. Go to **Settings** → **Notify me on this device** → allow notifications.
 4. Tap **Send test**. You should get a ping within a second or two.
 
-Send her the same URL and PIN. She only needs to add wishes; she does not have to turn on notifications (unless she wants to know when you tick something off, which the app does not send today).
+From then on, whatever she adds pings his phone and whatever he adds pings hers. You can change your side later under Settings → *Change who I am*.
 
 ## Optional: Telegram instead of / as well as push
 
@@ -61,13 +65,15 @@ If push is fiddly on your phone, Telegram is the most reliable channel:
 3. Open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `chat.id`.
 4. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 
-Every notification is then sent to both push subscribers and the Telegram chat.
+Every notification is then also sent to the Telegram chat, whichever side it was meant for (Telegram is one chat, so it cannot be split per person).
 
 ## How it works
 
 - `server.js`: Express API + static files. Items and push subscriptions are saved to `DATA_DIR/items.json` and `DATA_DIR/subscriptions.json` (atomic writes).
 - `public/`: the app. Plain HTML/CSS/JS, no build step. `sw.js` is the service worker that shows push notifications and caches the shell for offline.
-- A notification is sent when a wish is added, when an open wish is bumped to a higher urgency, and (if `REMINDER_HOUR` is set) once a day listing open 🔥/🚨 wishes.
+- Every item has a `category` (`wish`, `travel`, `home`) and the `role` of whoever added it (`her`, `him`). Push subscriptions carry a role too; a notification for one side is only delivered to that side's devices.
+- A notification is sent to the other side when an item is added, when an open item is bumped to a higher urgency, and (if `REMINDER_HOUR` is set) once a day listing the other person's open 🔥/🚨 items.
+- `public/icons.js` holds the Lucide icons the UI uses, extracted from the Iconify icon-sets repo by `npm run icons:extract`.
 - Expired push subscriptions are removed automatically when the push service reports them gone.
 
 ## API
@@ -78,12 +84,12 @@ All routes except `GET /api/config` require the `x-pin` header when `APP_PIN` is
 | --- | --- | --- |
 | `GET` | `/api/config` | – |
 | `GET` | `/api/items` | – |
-| `POST` | `/api/items` | `{ title, urgency, note?, link?, addedBy? }` |
+| `POST` | `/api/items` | `{ title, urgency, category?, role?, note?, link?, addedBy? }` |
 | `PATCH` | `/api/items/:id` | any of `{ done, urgency, title, note, link }` |
 | `DELETE` | `/api/items/:id` | – |
-| `POST` | `/api/subscribe` | a `PushSubscription` JSON |
+| `POST` | `/api/subscribe` | a `PushSubscription` JSON plus `role` |
 | `DELETE` | `/api/subscribe` | `{ endpoint }` |
-| `POST` | `/api/test-notification` | – |
+| `POST` | `/api/test-notification` | `{ role? }` (sent to that side's devices) |
 
 ## Tests
 
