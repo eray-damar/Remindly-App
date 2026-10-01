@@ -85,6 +85,51 @@
     <p id="empty" class="empty" hidden></p>
   </section>
 
+  <!-- Score -->
+  <section id="score-view" hidden>
+    <span class="pill"><i data-icon="trophy" data-size="13"></i> Scoreboard</span>
+    <h1>Score</h1>
+    <p class="lead">Granting each other's wishes earns points. Your own don't count.</p>
+
+    <div class="card versus">
+      <div class="vs-row">
+        <div class="vs-side her"><div class="vs-name" id="vs-her-name">Her</div><div class="vs-pts" id="vs-her-pts">0</div><div class="vs-sub" id="vs-her-sub"></div></div>
+        <div class="vs-mid"><i data-icon="swords" data-size="22"></i></div>
+        <div class="vs-side him"><div class="vs-name" id="vs-him-name">Him</div><div class="vs-pts" id="vs-him-pts">0</div><div class="vs-sub" id="vs-him-sub"></div></div>
+      </div>
+      <div class="tug"><span id="tug-her"></span><span id="tug-him"></span></div>
+      <p class="vs-lead" id="vs-lead"></p>
+    </div>
+
+    <div class="card level">
+      <div class="level-row">
+        <div class="level-badge" id="level-badge"><i data-icon="crown" data-size="22"></i><span id="level-num">1</span></div>
+        <div class="level-text">
+          <div class="level-title" id="level-title">Newbie</div>
+          <div class="level-sub" id="level-sub"></div>
+        </div>
+        <div class="level-pts"><span id="level-pts">0</span><small>pts</small></div>
+      </div>
+      <div class="bar"><span id="level-bar"></span></div>
+      <div class="stats">
+        <div><i data-icon="gift" data-size="16"></i><b id="stat-grants">0</b> granted</div>
+        <div><i data-icon="calendar-check" data-size="16"></i><b id="stat-streak">0</b> week streak</div>
+        <div><i data-icon="zap" data-size="16"></i><b id="stat-month">0</b> this month</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Badges</h2>
+      <div class="badges" id="badges"></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent grants</h2>
+      <ul class="feed" id="feed"></ul>
+      <p class="muted" id="feed-empty" hidden>No grants yet. Go make someone's day.</p>
+    </div>
+  </section>
+
   <!-- Settings -->
   <section id="settings-view" hidden>
     <span class="pill"><i data-icon="user-round" data-size="13"></i> You</span>
@@ -133,6 +178,10 @@
       <i data-icon="armchair" data-size="24"></i>
       <span>Home</span>
     </button>
+    <button type="button" class="tab" data-tab="score">
+      <i data-icon="trophy" data-size="24"></i>
+      <span>Score</span>
+    </button>
     <button type="button" class="tab" data-tab="settings">
       <i data-icon="settings-2" data-size="24"></i>
       <span>Settings</span>
@@ -168,6 +217,7 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="confetti" class="confetti" aria-hidden="true"></div>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

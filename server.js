@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { computeScores, pointsFor, levelFor, POINTS, TRAVEL_MULTIPLIER, QUICK_DAYS, QUICK_BONUS, LEVELS, BADGES } from "./game.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -175,6 +176,7 @@ app.get("/api/config", (_req, res) => {
     urgency: URGENCY,
     categories: CATEGORIES,
     roles: ROLES,
+    game: { points: POINTS, travelMultiplier: TRAVEL_MULTIPLIER, quickDays: QUICK_DAYS, quickBonus: QUICK_BONUS, levels: LEVELS, badges: BADGES },
   });
 });
 
@@ -187,7 +189,11 @@ app.use("/api", (req, res, next) => {
 });
 
 app.get("/api/items", (_req, res) => {
-  res.json(items.map((i) => ({ category: "wish", role: "", ...i })));
+  res.json(items.map((i) => ({ category: "wish", role: "", doneBy: null, ...i })));
+});
+
+app.get("/api/score", (_req, res) => {
+  res.json(computeScores(items));
 });
 
 app.post("/api/items", (req, res) => {
@@ -216,6 +222,7 @@ app.post("/api/items", (req, res) => {
     done: false,
     createdAt: new Date().toISOString(),
     doneAt: null,
+    doneBy: null,
   };
   items.unshift(item);
   saveItems();
@@ -234,9 +241,34 @@ app.patch("/api/items/:id", (req, res) => {
   const item = items.find((i) => i.id === req.params.id);
   if (!item) return res.status(404).json({ error: "not found" });
   const { done, urgency, title, note, link } = req.body ?? {};
-  if (typeof done === "boolean") {
+  const actor = ROLES.includes(req.body?.role) ? req.body.role : null;
+  let earned = 0;
+  let levelUp = null;
+  if (typeof done === "boolean" && done !== item.done) {
+    const before = actor ? levelFor(computeScores(items)[actor].points) : null;
     item.done = done;
     item.doneAt = done ? new Date().toISOString() : null;
+    item.doneBy = done ? actor : null;
+    if (done) {
+      earned = pointsFor(item);
+      const actorName = req.body?.actorName ? String(req.body.actorName).trim().slice(0, 40) : (actor === "her" ? "She" : actor === "him" ? "He" : "Someone");
+      const c = CATEGORIES[item.category] || CATEGORIES.wish;
+      if (earned > 0) {
+        const after = levelFor(computeScores(items)[actor].points);
+        if (before && after.level > before.level) levelUp = { level: after.level, title: after.title };
+        // Tell the person whose wish it was.
+        notify({
+          title: `🎉 ${actorName} granted: ${item.title}`,
+          body: `${c.emoji} ${c.doneLabel} · +${earned} pts for ${actorName}${levelUp ? ` · now level ${levelUp.level} ${levelUp.title}!` : ""}`,
+          url: "/#score",
+          tag: `item-${item.id}`,
+          toRole: item.role,
+        });
+        if (levelUp) {
+          notify({ title: `🏆 ${actorName} reached level ${levelUp.level}: ${levelUp.title}`, body: `${after.points} points and counting.`, url: "/#score", tag: "level-up", toRole: actor });
+        }
+      }
+    }
   }
   if (urgency !== undefined) {
     if (!URGENCY[urgency]) return res.status(400).json({ error: "unknown urgency" });
@@ -256,7 +288,7 @@ app.patch("/api/items/:id", (req, res) => {
   if (typeof note === "string") item.note = note.trim().slice(0, 500);
   if (typeof link === "string") item.link = link.trim().slice(0, 500);
   saveItems();
-  res.json(item);
+  res.json({ ...item, earned, levelUp });
 });
 
 app.delete("/api/items/:id", (req, res) => {

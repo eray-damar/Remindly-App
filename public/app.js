@@ -11,12 +11,15 @@ const CATEGORY_UI = {
   home: { icon: "armchair", title: "Home", pill: "Furniture & home", lead: "Ideas for our place, big and small.", placeholder: "Something for our place…", sheet: "New home idea", submit: "Add idea", progress: "Home ideas done", unit: "idea", units: "ideas", done: "Done", doneVerb: "done", emptyOpen: "No home ideas yet. Tap + to add one.", emptyDone: "Nothing done yet." },
 };
 const ROLE_LABEL = { her: "Her", him: "Him" };
+const CATEGORY_ICON = { wish: "heart", travel: "plane", home: "armchair" };
+const otherRole = (r) => (r === "her" ? "him" : r === "him" ? "her" : null);
 
 const $ = (sel) => document.querySelector(sel);
 const views = {
   pin: $("#pin-view"),
   name: $("#name-view"),
   main: $("#main-view"),
+  score: $("#score-view"),
   settings: $("#settings-view"),
 };
 
@@ -30,12 +33,39 @@ const state = {
   name: localStorage.getItem("remindly.name") || "",
   role: localStorage.getItem("remindly.role") || "",
   pushSubscription: null,
+  score: null,
 };
+
+/** Points the current user would earn by granting this item (mirrors game.js). */
+function worth(item) {
+  const g = state.config.game;
+  if (!g || item.done || !item.role || !state.role || item.role === state.role) return 0;
+  let pts = g.points[item.urgency] ?? g.points.medium;
+  if (item.category === "travel") pts *= g.travelMultiplier;
+  const days = (Date.now() - new Date(item.createdAt)) / 86400000;
+  if (days <= g.quickDays) pts += g.quickBonus;
+  return pts;
+}
+
+function confetti() {
+  const box = $("#confetti");
+  const colors = ["#ef6a45", "#e0567a", "#3f7fc4", "#f4b942", "#7bb37a", "#ffd1a8"];
+  for (let i = 0; i < 36; i++) {
+    const p = document.createElement("i");
+    p.style.left = `${Math.random() * 100}%`;
+    p.style.background = colors[i % colors.length];
+    p.style.animationDelay = `${Math.random() * 0.4}s`;
+    p.style.animationDuration = `${1.3 + Math.random() * 0.8}s`;
+    p.style.transform = `rotate(${Math.random() * 360}deg)`;
+    box.appendChild(p);
+    setTimeout(() => p.remove(), 2400);
+  }
+}
 
 // ---------- helpers ----------
 function show(view) {
   for (const [key, el] of Object.entries(views)) el.hidden = key !== view;
-  const inApp = view === "main" || view === "settings";
+  const inApp = view === "main" || view === "settings" || view === "score";
   $("#tabbar").hidden = !inApp;
   $("#fab").hidden = view !== "main";
   window.scrollTo({ top: 0 });
@@ -131,11 +161,12 @@ function render() {
           <div class="title">${escapeHtml(item.title)}</div>
           <span class="badge ${item.urgency}">${icon(URGENCY_ICON[item.urgency], "14px")} ${escapeHtml(u.label)}</span>
         </div>
+        ${worth(item) ? `<div class="worth-row"><span class="worth">${icon("zap", "12px")} worth ${worth(item)} pts</span></div>` : ""}
         ${item.note ? `<p class="note">${escapeHtml(item.note)}</p>` : ""}
         ${item.link ? `<a class="link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${icon("external-link", "14px")} ${escapeHtml(item.link.replace(/^https?:\/\//, "").slice(0, 60))}</a>` : ""}
         <div class="meta"><span class="who ${item.role || ""}">${escapeHtml(item.addedBy || ROLE_LABEL[item.role] || "Someone")}</span> · ${item.done && item.doneAt ? `${ui.doneVerb} ${timeAgo(item.doneAt)}` : `added ${timeAgo(item.createdAt)}`}</div>
         <div class="actions">
-          <button type="button" class="${item.done ? "" : "got"}" data-action="toggle">${item.done ? icon("rotate-ccw", "16px") + " Reopen" : icon("check", "16px") + " " + ui.done}</button>
+          <button type="button" class="${item.done ? "" : "got"}" data-action="toggle">${item.done ? icon("rotate-ccw", "16px") + " Reopen" : icon("check", "16px") + " " + ui.done + (worth(item) ? ` · +${worth(item)}` : "")}</button>
           ${item.done ? "" : `<select data-action="urgency" aria-label="Change urgency">${options}</select>`}
           <span class="spacer"></span>
           <button type="button" class="danger" data-action="delete" aria-label="Delete">${icon("trash-2", "17px")}</button>
@@ -342,10 +373,17 @@ $("#list").addEventListener("click", async (e) => {
   if (!item) return;
   try {
     if (btn.dataset.action === "toggle") {
-      const updated = await api(`/items/${id}`, { method: "PATCH", body: { done: !item.done } });
-      Object.assign(item, updated);
+      const updated = await api(`/items/${id}`, { method: "PATCH", body: { done: !item.done, role: state.role, actorName: state.name } });
+      const { earned, levelUp, ...rest } = updated;
+      Object.assign(item, rest);
       render();
-      toast(updated.done ? `🎉 ${CATEGORY_UI[state.tab]?.done || "Done"}!` : "Reopened");
+      if (updated.done && earned > 0) {
+        confetti();
+        toast(levelUp ? `🏆 +${earned} pts · Level ${levelUp.level}: ${levelUp.title}!` : `🎉 +${earned} pts for you!`, 3000);
+      } else {
+        toast(updated.done ? `${CATEGORY_UI[state.tab]?.done || "Done"}!` : "Reopened");
+      }
+      state.score = null; // refetch next time the score tab opens
     } else if (btn.dataset.action === "delete") {
       if (!confirm(`Delete "${item.title}"?`)) return;
       await api(`/items/${id}`, { method: "DELETE" });
@@ -372,6 +410,48 @@ $("#list").addEventListener("change", async (e) => {
   }
 });
 
+async function renderScore() {
+  const data = await api("/score");
+  state.score = data;
+  const her = data.her, him = data.him;
+  const name = (side) => side.name || ROLE_LABEL[side.role];
+  $("#vs-her-name").textContent = name(her);
+  $("#vs-him-name").textContent = name(him);
+  $("#vs-her-pts").textContent = her.points;
+  $("#vs-him-pts").textContent = him.points;
+  $("#vs-her-sub").textContent = `Lv ${her.level} · ${her.title}`;
+  $("#vs-him-sub").textContent = `Lv ${him.level} · ${him.title}`;
+  const total = her.points + him.points;
+  $("#tug-her").style.width = total ? `${(her.points / total) * 100}%` : "50%";
+  $("#tug-him").style.width = total ? `${(him.points / total) * 100}%` : "50%";
+  const diff = Math.abs(her.points - him.points);
+  $("#vs-lead").textContent = total === 0
+    ? "Nobody has scored yet. First grant takes the lead!"
+    : diff === 0 ? "Dead heat. Someone grant something!"
+    : `${name(her.points > him.points ? her : him)} leads by ${diff} pts${diff <= 30 ? " · it's close!" : ""}`;
+
+  const me = data[state.role] || her;
+  $("#level-num").textContent = me.level;
+  $("#level-title").textContent = me.title;
+  $("#level-sub").textContent = me.nextAt ? `${me.nextAt - me.points} pts to ${me.nextTitle}` : "Max level. Legendary.";
+  $("#level-pts").textContent = me.points;
+  $("#level-bar").style.width = `${Math.round(me.progress * 100)}%`;
+  $("#stat-grants").textContent = me.grants;
+  $("#stat-streak").textContent = me.streak;
+  $("#stat-month").textContent = me.month;
+  $("#badges").innerHTML = me.badges
+    .map((b) => `<div class="badge-tile ${b.earned ? "earned" : "locked"}"><div class="ring">${icon(b.earned ? b.icon : "lock", "20px")}</div><div class="bname">${escapeHtml(b.name)}</div><div class="bdesc">${escapeHtml(b.desc)}</div></div>`)
+    .join("");
+
+  const feed = [...her.recent.map((r) => ({ ...r, by: name(her), side: "her" })), ...him.recent.map((r) => ({ ...r, by: name(him), side: "him" }))]
+    .sort((a, b) => new Date(b.doneAt) - new Date(a.doneAt))
+    .slice(0, 8);
+  $("#feed").innerHTML = feed
+    .map((f) => `<li><div class="ficon">${icon(CATEGORY_ICON[f.category] || "heart", "16px")}</div><div class="ftext"><div class="ftitle">${escapeHtml(f.title)}</div><div class="fsub"><span class="who ${f.side}">${escapeHtml(f.by)}</span> · ${timeAgo(f.doneAt)}</div></div><div class="fpts">+${f.points}</div></li>`)
+    .join("");
+  $("#feed-empty").hidden = feed.length > 0;
+}
+
 function setActiveTab() {
   document.querySelectorAll(".tabbar .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === state.tab));
 }
@@ -384,6 +464,9 @@ document.querySelectorAll(".tabbar .tab").forEach((t) =>
       $("#me-role").textContent = ROLE_LABEL[state.role] || "no side picked";
       show("settings");
       await updatePushStatus();
+    } else if (state.tab === "score") {
+      show("score");
+      try { await renderScore(); } catch (err) { if (err.message !== "pin") toast(err.message); }
     } else {
       state.status = "open";
       show("main");
@@ -427,7 +510,11 @@ $("#logout-btn").addEventListener("click", () => {
 });
 
 // Keep the list fresh while the app is open.
-setInterval(() => { if (!views.main.hidden && document.visibilityState === "visible") refresh(); }, 30_000);
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  if (!views.main.hidden) refresh();
+  else if (!views.score.hidden) renderScore().catch(() => {});
+}, 30_000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !views.main.hidden) refresh(); });
 
 // ---------- boot ----------
@@ -437,8 +524,15 @@ async function boot() {
   }
   if (state.config.pinRequired && !state.pin) return show("pin");
   if (!state.name || !state.role) return show("name");
+  if (location.hash === "#score") state.tab = "score";
   state.tab = state.tab === "settings" ? "wish" : state.tab;
   setActiveTab();
+  if (state.tab === "score") {
+    show("score");
+    history.replaceState(null, "", "/");
+    await renderScore();
+    return;
+  }
   show("main");
   await refresh();
   // Jump to an item when opened from a notification.

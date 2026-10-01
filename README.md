@@ -56,6 +56,26 @@ Do this on each phone:
 
 From then on, whatever she adds pings his phone and whatever he adds pings hers. You can change your side later under Settings → *Change who I am*.
 
+## The game
+
+Granting the *other* person's wishes earns points. Ticking your own items earns nothing, so the only way to score is to make your partner happy.
+
+| Urgency | Points |
+| --- | --- |
+| 🙂 Whenever | 10 |
+| 🙏 Soon-ish | 20 |
+| 🔥 Really want | 35 |
+| 🚨 NEED IT | 50 |
+
+Travel ideas count double. Granting within 3 days of it being added earns a +10 bonus. Reopening an item takes the points back.
+
+- **Levels:** Newbie → Sweetheart (100) → Thoughtful (250) → Attentive (500) → Mind reader (900) → Wish genie (1500) → Legend (2500).
+- **Streak:** consecutive weeks with at least one grant.
+- **Badges:** First spark, Giver (5), Wish genie (10), Firefighter (grant a NEED IT), Lightning (within 24 h), Globetrotter (travel), Nest builder (home), Hat-trick (3 in one day), On a roll (3-week streak).
+- The **Score** tab shows the head-to-head, your level, badges and the recent grants feed. The person whose wish was granted gets a notification, and both get one on a level-up.
+
+Scores are derived from the items every time (`GET /api/score`), nothing is stored separately. The rules live in `game.js`.
+
 ## Optional: Telegram instead of / as well as push
 
 If push is fiddly on your phone, Telegram is the most reliable channel:
@@ -85,7 +105,8 @@ All routes except `GET /api/config` require the `x-pin` header when `APP_PIN` is
 | `GET` | `/api/config` | – |
 | `GET` | `/api/items` | – |
 | `POST` | `/api/items` | `{ title, urgency, category?, role?, note?, link?, addedBy? }` |
-| `PATCH` | `/api/items/:id` | any of `{ done, urgency, title, note, link }` |
+| `PATCH` | `/api/items/:id` | any of `{ done, urgency, title, note, link }` plus `role` / `actorName` of who is ticking it off; returns the item with `earned` points and `levelUp` |
+| `GET` | `/api/score` | – (both sides' points, level, streak, badges, recent grants) |
 | `DELETE` | `/api/items/:id` | – |
 | `POST` | `/api/subscribe` | a `PushSubscription` JSON plus `role` |
 | `DELETE` | `/api/subscribe` | `{ endpoint }` |

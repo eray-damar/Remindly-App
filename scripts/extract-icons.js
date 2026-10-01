@@ -13,6 +13,7 @@ const ICONS = [
   "external-link", "bell", "bell-ring", "bell-off", "send", "user-round", "log-out",
   "sparkles", "leaf", "clock", "flame", "siren", "lock", "x", "key-round", "party-popper",
   "plane", "armchair", "map-pin", "users-round", "list-checks",
+  "trophy", "medal", "zap", "calendar-check", "wand-sparkles", "heart-handshake", "crown", "gift", "swords",
 ];
 
 const res = await fetch(SOURCE);

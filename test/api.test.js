@@ -105,11 +105,29 @@ test("create, validate, update, sort by urgency, delete", async () => {
   assert.equal(list.length, 2);
   assert.equal(list[0].title, "Tickets"); // newest first from the server; client sorts by urgency
 
-  const done = await j(`/api/items/${a.body.id}`, { method: "PATCH", body: JSON.stringify({ done: true }) });
+  // Her item ticked by him -> he earns points (low = 10, +10 quick bonus since it was just added).
+  const done = await j(`/api/items/${a.body.id}`, { method: "PATCH", body: JSON.stringify({ done: true, role: "him", actorName: "Eray" }) });
   assert.equal(done.body.done, true);
   assert.ok(done.body.doneAt);
+  assert.equal(done.body.doneBy, "him");
+  assert.equal(done.body.earned, 20);
+  assert.equal(done.body.levelUp, null);
+  let score = (await j("/api/score")).body;
+  assert.equal(score.him.points, 20);
+  assert.equal(score.him.grants, 1);
+  assert.equal(score.her.points, 0);
+  assert.ok(score.him.badges.find((x) => x.id === "first").earned);
+  assert.ok(score.him.badges.find((x) => x.id === "lightning").earned);
+  // Ticking your own item earns nothing.
+  const own = await j(`/api/items/${a.body.id}`, { method: "PATCH", body: JSON.stringify({ done: false, role: "her" }) });
+  assert.equal(own.body.doneBy, null);
+  const ownDone = await j(`/api/items/${a.body.id}`, { method: "PATCH", body: JSON.stringify({ done: true, role: "her" }) });
+  assert.equal(ownDone.body.earned, 0);
+  score = (await j("/api/score")).body;
+  assert.equal(score.him.points, 0); // reopening took his points back
+  assert.equal(score.her.points, 0);
 
-  const bumped = await j(`/api/items/${a.body.id}`, { method: "PATCH", body: JSON.stringify({ done: false, urgency: "high" }) });
+  const bumped = await j(`/api/items/${a.body.id}`, { method: "PATCH", body: JSON.stringify({ done: false, urgency: "high", role: "her" }) });
   assert.equal(bumped.body.urgency, "high");
   assert.equal(bumped.body.doneAt, null);
   assert.equal((await j(`/api/items/${a.body.id}`, { method: "PATCH", body: JSON.stringify({ urgency: "nah" }) })).status, 400);
@@ -162,6 +180,17 @@ test("push: her phone hears about his wishes and vice versa; expired subscriptio
   await j("/api/items", { method: "POST", body: JSON.stringify({ title: "Anything", urgency: "low" }) });
   await waitFor(() => pushHits === 2);
   assert.deepEqual(pushUrls.sort(), ["/push/her-phone", "/push/his-phone"]);
+
+  // Granting her wish tells her phone (and only hers) about it.
+  pushHits = 0; pushUrls = [];
+  const wish = (await j("/api/items", { method: "POST", body: JSON.stringify({ title: "Scarf", urgency: "high", role: "her" }) })).body;
+  await waitFor(() => pushHits === 1); // his phone got the "new wish" push
+  pushHits = 0; pushUrls = [];
+  const granted = await j(`/api/items/${wish.id}`, { method: "PATCH", body: JSON.stringify({ done: true, role: "him", actorName: "Eray" }) });
+  assert.equal(granted.body.earned, 45);
+  await waitFor(() => pushHits === 1);
+  await new Promise((r) => setTimeout(r, 150));
+  assert.deepEqual(pushUrls, ["/push/her-phone"]);
 
   // The test ping goes to the caller's own side.
   pushHits = 0; pushUrls = [];
