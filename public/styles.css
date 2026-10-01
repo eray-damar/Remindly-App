@@ -1,18 +1,18 @@
 :root {
-  --bg: #f6f3ef;
+  --bg: #fbfaf8;
   --card: #ffffff;
   --text: #1c1715;
   --muted: #7a6f6a;
-  --coral: #e8562d;
-  --coral-dark: #c9431d;
-  --coral-soft: #fde6dc;
-  --border: #ece6e0;
+  --coral: #ef6a45;
+  --coral-dark: #d4512c;
+  --coral-soft: #fdeee7;
+  --border: #f0ebe6;
   --low: #7bb37a;
   --medium: #e4a63a;
   --high: #ef7a3c;
   --urgent: #d93a3a;
   --radius: 18px;
-  --shadow: 0 6px 24px rgba(60, 30, 20, 0.07);
+  --shadow: 0 4px 18px rgba(60, 30, 20, 0.05);
   --serif: "DM Serif Display", Georgia, "Times New Roman", serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --tabbar-h: 76px;
@@ -34,9 +34,9 @@ body {
 .hero {
   position: fixed;
   inset: 0 0 auto 0;
-  height: 46vh;
-  min-height: 300px;
-  max-height: 420px;
+  height: 42vh;
+  min-height: 280px;
+  max-height: 400px;
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
@@ -46,12 +46,12 @@ body {
 .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(48px);
-  opacity: 0.9;
+  filter: blur(56px);
+  opacity: 0.55;
 }
-.b1 { width: 70vw; height: 70vw; max-width: 420px; max-height: 420px; left: -16vw; top: -6vw; background: var(--coral); }
-.b2 { width: 60vw; height: 60vw; max-width: 380px; max-height: 380px; right: -14vw; top: 2vw; background: #ffb3a0; }
-.b3 { width: 44vw; height: 44vw; max-width: 300px; max-height: 300px; left: 22vw; top: 16vw; background: #ffd1c2; opacity: 0.8; }
+.b1 { width: 70vw; height: 70vw; max-width: 420px; max-height: 420px; left: -16vw; top: -6vw; background: #ff8e6a; }
+.b2 { width: 60vw; height: 60vw; max-width: 380px; max-height: 380px; right: -14vw; top: 2vw; background: #ffc4b3; }
+.b3 { width: 44vw; height: 44vw; max-width: 300px; max-height: 300px; left: 22vw; top: 16vw; background: #ffe0d4; opacity: 0.6; }
 
 section {
   position: relative;
@@ -206,7 +206,7 @@ button:disabled { opacity: 0.55; cursor: default; }
   display: grid;
   place-items: center;
   padding: 0;
-  box-shadow: 0 10px 24px rgba(232, 86, 45, 0.4);
+  box-shadow: 0 8px 20px rgba(239, 106, 69, 0.3);
   z-index: 5;
 }
 
@@ -289,7 +289,7 @@ button:disabled { opacity: 0.55; cursor: default; }
     --border: #3a2e29;
     --shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
   }
-  .blob { opacity: 0.55; }
+  .blob { opacity: 0.4; }
   input::placeholder { color: #7d6f68; }
   .tabbar { background: rgba(26, 20, 18, 0.88); }
   .tabbar .tab { color: #7d6f68; }
