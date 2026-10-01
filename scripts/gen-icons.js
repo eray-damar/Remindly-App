@@ -49,7 +49,7 @@ function render(size) {
         continue;
       }
       const t = py / size;
-      let r = Math.round(255 - 30 * t), g = Math.round(90 + 20 * t), b = Math.round(130 + 40 * t);
+      let r = Math.round(232 + 20 * t), g = Math.round(86 + 90 * t), b = Math.round(45 + 115 * t);
       // Supersampled heart.
       let hits = 0;
       for (let sy = 0; sy < 3; sy++)

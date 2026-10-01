@@ -11,7 +11,7 @@ const views = {
 const state = {
   config: null,
   items: [],
-  tab: "open",
+  tab: "open", // open | done | settings
   pin: localStorage.getItem("remindly.pin") || "",
   name: localStorage.getItem("remindly.name") || "",
   pushSubscription: null,
@@ -20,6 +20,10 @@ const state = {
 // ---------- helpers ----------
 function show(view) {
   for (const [key, el] of Object.entries(views)) el.hidden = key !== view;
+  const inApp = view === "main" || view === "settings";
+  $("#tabbar").hidden = !inApp;
+  $("#fab").hidden = view !== "main";
+  window.scrollTo({ top: 0 });
 }
 
 let toastTimer;
@@ -73,17 +77,30 @@ function render() {
   const U = state.config.urgency;
   const open = state.items.filter((i) => !i.done);
   const done = state.items.filter((i) => i.done);
-  $("#open-count").textContent = open.length;
-  $("#done-count").textContent = done.length;
+  const total = state.items.length;
+  const pct = total ? Math.round((done.length / total) * 100) : 0;
+  const urgentCount = open.filter((i) => U[i.urgency].rank >= U.high.rank).length;
 
-  const rows = (state.tab === "open" ? open : done).slice().sort((a, b) => {
-    if (state.tab === "done") return new Date(b.doneAt || b.createdAt) - new Date(a.doneAt || a.createdAt);
+  // Hero + progress card
+  const isDone = state.tab === "done";
+  $("#hero-pill").textContent = isDone
+    ? `${done.length} granted`
+    : open.length === 0 ? "All caught up" : `${open.length} open · ${urgentCount} burning`;
+  $("#hero-title").textContent = isDone ? "Granted" : "Wishes";
+  $("#hero-lead").textContent = isDone
+    ? "Everything that's already been taken care of."
+    : "Everything she's hoping for, sorted by how badly.";
+  $("#progress-sub").textContent = `${done.length} of ${total} wish${total === 1 ? "" : "es"}`;
+  $("#progress-pct").textContent = `${pct}%`;
+  $("#progress-bar").style.width = `${pct}%`;
+
+  const rows = (isDone ? done : open).slice().sort((a, b) => {
+    if (isDone) return new Date(b.doneAt || b.createdAt) - new Date(a.doneAt || a.createdAt);
     const r = U[b.urgency].rank - U[a.urgency].rank;
     return r !== 0 ? r : new Date(b.createdAt) - new Date(a.createdAt);
   });
 
-  const list = $("#list");
-  list.innerHTML = rows
+  $("#list").innerHTML = rows
     .map((item) => {
       const u = U[item.urgency];
       const options = Object.entries(U)
@@ -96,10 +113,10 @@ function render() {
           <span class="badge ${item.urgency}">${u.emoji} ${escapeHtml(u.label)}</span>
         </div>
         ${item.note ? `<p class="note">${escapeHtml(item.note)}</p>` : ""}
-        ${item.link ? `<a class="link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">🔗 ${escapeHtml(item.link.replace(/^https?:\/\//, "").slice(0, 60))}</a>` : ""}
-        <div class="meta">${item.addedBy ? `${escapeHtml(item.addedBy)} · ` : ""}${item.done && item.doneAt ? `done ${timeAgo(item.doneAt)}` : `added ${timeAgo(item.createdAt)}`}</div>
+        ${item.link ? `<a class="link" href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">↗ ${escapeHtml(item.link.replace(/^https?:\/\//, "").slice(0, 60))}</a>` : ""}
+        <div class="meta">${item.addedBy ? `${escapeHtml(item.addedBy)} · ` : ""}${item.done && item.doneAt ? `granted ${timeAgo(item.doneAt)}` : `added ${timeAgo(item.createdAt)}`}</div>
         <div class="actions">
-          <button type="button" data-action="toggle">${item.done ? "↩︎ Reopen" : "✓ Got it"}</button>
+          <button type="button" class="${item.done ? "" : "got"}" data-action="toggle">${item.done ? "Reopen" : "✓ Got it"}</button>
           ${item.done ? "" : `<select data-action="urgency" aria-label="Change urgency">${options}</select>`}
           <span class="spacer"></span>
           <button type="button" class="danger" data-action="delete" aria-label="Delete">🗑</button>
@@ -107,8 +124,9 @@ function render() {
       </li>`;
     })
     .join("");
-  $("#empty").hidden = rows.length > 0;
-  $("#empty").textContent = state.tab === "open" ? "No open wishes. Add one above! 💖" : "Nothing done yet.";
+  const empty = $("#empty");
+  empty.hidden = rows.length > 0;
+  empty.textContent = isDone ? "Nothing granted yet." : "No open wishes. Tap + to add one.";
 }
 
 async function refresh() {
@@ -140,23 +158,23 @@ async function updatePushStatus() {
   const btn = $("#push-btn");
   $("#ios-hint").hidden = !(isIOS && !isStandalone);
   $("#telegram-status").textContent = state.config.telegramEnabled
-    ? "📨 Telegram is connected too: every wish also lands in your Telegram chat."
+    ? "Telegram is connected too: every wish also lands in your Telegram chat."
     : "";
 
   if (!state.config.pushEnabled) {
-    status.textContent = "⚠️ Push isn't configured on the server yet (VAPID keys missing).";
+    status.textContent = "Push isn't configured on the server yet (VAPID keys missing).";
     btn.disabled = true;
     return;
   }
   if (!("PushManager" in window) || !("serviceWorker" in navigator)) {
     status.textContent = isIOS && !isStandalone
-      ? "📱 Add Remindly to your home screen first to enable notifications."
-      : "⚠️ This browser doesn't support push notifications.";
+      ? "Add Remindly to your home screen first to enable notifications."
+      : "This browser doesn't support push notifications.";
     btn.disabled = true;
     return;
   }
   if (Notification.permission === "denied") {
-    status.textContent = "🚫 Notifications are blocked for this site. Allow them in your browser settings.";
+    status.textContent = "Notifications are blocked for this site. Allow them in your browser settings.";
     btn.disabled = true;
     return;
   }
@@ -164,13 +182,13 @@ async function updatePushStatus() {
   state.pushSubscription = await reg.pushManager.getSubscription();
   btn.disabled = false;
   if (state.pushSubscription) {
-    status.textContent = "✅ This device gets notified for every new wish.";
-    btn.textContent = "🔕 Stop notifying this device";
-    btn.classList.remove("primary");
+    status.textContent = "✓ This device gets notified for every new wish.";
+    btn.textContent = "Stop notifying this device";
+    btn.classList.replace("primary", "ghost");
   } else {
     status.textContent = "This device is not receiving notifications yet.";
-    btn.textContent = "🔔 Notify me on this device";
-    btn.classList.add("primary");
+    btn.textContent = "Notify me on this device";
+    btn.classList.replace("ghost", "primary");
   }
 }
 
@@ -194,7 +212,7 @@ async function togglePush() {
         applicationServerKey: urlBase64ToUint8Array(state.config.vapidPublicKey),
       });
       await api("/subscribe", { method: "POST", body: sub.toJSON() });
-      toast("🔔 You'll be notified here");
+      toast("You'll be notified here");
     }
   } catch (err) {
     console.error(err);
@@ -202,6 +220,17 @@ async function togglePush() {
   } finally {
     await updatePushStatus();
   }
+}
+
+// ---------- add sheet ----------
+function openSheet() {
+  $("#sheet").hidden = false;
+  document.body.style.overflow = "hidden";
+  setTimeout(() => $("#title-input").focus(), 50);
+}
+function closeSheet() {
+  $("#sheet").hidden = true;
+  document.body.style.overflow = "";
 }
 
 // ---------- events ----------
@@ -227,6 +256,14 @@ $("#name-form").addEventListener("submit", (e) => {
   boot();
 });
 
+$("#fab").addEventListener("click", openSheet);
+$("#sheet").addEventListener("click", (e) => {
+  if (e.target.closest("[data-close]")) closeSheet();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("#sheet").hidden) closeSheet();
+});
+
 $("#add-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.currentTarget;
@@ -243,12 +280,12 @@ $("#add-form").addEventListener("submit", async (e) => {
     const item = await api("/items", { method: "POST", body });
     state.items.unshift(item);
     form.reset();
-    form.querySelector("details").open = false;
+    closeSheet();
     state.tab = "open";
     setActiveTab();
     render();
     document.getElementById(`item-${item.id}`)?.classList.add("flash");
-    toast("Added 💖");
+    toast("Added 💌");
   } catch (err) {
     toast(err.message);
   } finally {
@@ -259,8 +296,7 @@ $("#add-form").addEventListener("submit", async (e) => {
 $("#list").addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-action]");
   if (!btn) return;
-  const li = btn.closest("li");
-  const id = li.dataset.id;
+  const id = btn.closest("li").dataset.id;
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   try {
@@ -268,7 +304,7 @@ $("#list").addEventListener("click", async (e) => {
       const updated = await api(`/items/${id}`, { method: "PATCH", body: { done: !item.done } });
       Object.assign(item, updated);
       render();
-      toast(updated.done ? "🎉 Marked as got it" : "Reopened");
+      toast(updated.done ? "🎉 Wish granted" : "Reopened");
     } else if (btn.dataset.action === "delete") {
       if (!confirm(`Delete "${item.title}"?`)) return;
       await api(`/items/${id}`, { method: "DELETE" });
@@ -296,23 +332,23 @@ $("#list").addEventListener("change", async (e) => {
 });
 
 function setActiveTab() {
-  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === state.tab));
+  document.querySelectorAll(".tabbar .tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === state.tab));
 }
-document.querySelectorAll(".tab").forEach((t) =>
-  t.addEventListener("click", () => {
+document.querySelectorAll(".tabbar .tab").forEach((t) =>
+  t.addEventListener("click", async () => {
     state.tab = t.dataset.tab;
     setActiveTab();
-    render();
+    if (state.tab === "settings") {
+      $("#me-name").textContent = state.name;
+      show("settings");
+      await updatePushStatus();
+    } else {
+      show("main");
+      render();
+    }
   })
 );
 
-$("#settings-btn").addEventListener("click", async () => {
-  if (views.pin.hidden === false || views.name.hidden === false) return;
-  $("#me-name").textContent = state.name;
-  show("settings");
-  await updatePushStatus();
-});
-$("#close-settings-btn").addEventListener("click", () => show("main"));
 $("#push-btn").addEventListener("click", togglePush);
 $("#test-btn").addEventListener("click", async () => {
   try {
@@ -343,6 +379,8 @@ async function boot() {
   }
   if (state.config.pinRequired && !state.pin) return show("pin");
   if (!state.name) return show("name");
+  state.tab = state.tab === "settings" ? "open" : state.tab;
+  setActiveTab();
   show("main");
   await refresh();
   // Jump to an item when opened from a notification.

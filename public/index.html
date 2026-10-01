@@ -5,93 +5,142 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Remindly</title>
   <meta name="description" content="Her wishes, your notifications." />
-  <meta name="theme-color" content="#ff5c8a" />
+  <meta name="theme-color" content="#f6f3ef" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#1a1412" media="(prefers-color-scheme: dark)" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Remindly" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="top">
-    <h1>💌 Remindly</h1>
-    <button id="settings-btn" class="icon-btn" type="button" aria-label="Notifications & settings">⚙️</button>
-  </header>
+  <div class="hero" aria-hidden="true">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+  </div>
 
-  <main id="app">
-    <!-- PIN gate -->
-    <section id="pin-view" class="card" hidden>
-      <h2>Enter the PIN</h2>
-      <p class="muted">Ask the person who set this up.</p>
-      <form id="pin-form">
-        <input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="PIN" required />
-        <button type="submit" class="primary">Unlock</button>
-      </form>
+  <!-- PIN gate -->
+  <section id="pin-view" class="gate" hidden>
+    <span class="pill">Private</span>
+    <h1>Enter the PIN</h1>
+    <p class="lead">Ask the person who set this up.</p>
+    <form id="pin-form" class="card">
+      <input id="pin-input" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="PIN" required />
+      <button type="submit" class="primary">Unlock</button>
       <p id="pin-error" class="error" hidden>That PIN isn't right.</p>
-    </section>
+    </form>
+  </section>
 
-    <!-- Name gate -->
-    <section id="name-view" class="card" hidden>
-      <h2>What's your name?</h2>
-      <p class="muted">So notifications say who wants what.</p>
-      <form id="name-form">
-        <input id="name-input" type="text" maxlength="40" placeholder="Your name" required />
-        <button type="submit" class="primary">Continue</button>
-      </form>
-    </section>
+  <!-- Name gate -->
+  <section id="name-view" class="gate" hidden>
+    <span class="pill">Hello</span>
+    <h1>What's your name?</h1>
+    <p class="lead">So notifications say who wants what.</p>
+    <form id="name-form" class="card">
+      <input id="name-input" type="text" maxlength="40" placeholder="Your name" required />
+      <button type="submit" class="primary">Continue</button>
+    </form>
+  </section>
 
-    <!-- Main -->
-    <section id="main-view" hidden>
-      <form id="add-form" class="card add">
-        <input id="title-input" type="text" maxlength="140" placeholder="I want…" required autocomplete="off" />
-        <div class="urgency-picker" role="radiogroup" aria-label="How badly?">
-          <label><input type="radio" name="urgency" value="low" /><span>🙂 Whenever</span></label>
-          <label><input type="radio" name="urgency" value="medium" checked /><span>🙏 Soon-ish</span></label>
-          <label><input type="radio" name="urgency" value="high" /><span>🔥 Really want</span></label>
-          <label><input type="radio" name="urgency" value="urgent" /><span>🚨 NEED IT</span></label>
+  <!-- Wishes / Done -->
+  <section id="main-view" hidden>
+    <span id="hero-pill" class="pill">Wishlist</span>
+    <h1 id="hero-title">Wishes</h1>
+    <p id="hero-lead" class="lead">Everything she's hoping for, sorted by how badly.</p>
+
+    <div class="card progress">
+      <div class="progress-row">
+        <div>
+          <div class="progress-title">Wishes granted</div>
+          <div id="progress-sub" class="progress-sub">0 of 0 wishes</div>
         </div>
-        <details class="more">
-          <summary>Add a note or link</summary>
-          <input id="note-input" type="text" maxlength="500" placeholder="Note (size, colour, why…)" />
-          <input id="link-input" type="url" maxlength="500" placeholder="https://…" />
-        </details>
-        <button type="submit" class="primary">Add wish</button>
-      </form>
+        <div id="progress-pct" class="progress-pct">0%</div>
+      </div>
+      <div class="bar"><span id="progress-bar"></span></div>
+    </div>
 
-      <nav class="tabs" aria-label="Filter">
-        <button type="button" class="tab active" data-tab="open">Open <span id="open-count" class="count">0</span></button>
-        <button type="button" class="tab" data-tab="done">Done <span id="done-count" class="count">0</span></button>
-      </nav>
+    <ul id="list" class="list"></ul>
+    <p id="empty" class="empty" hidden></p>
+  </section>
 
-      <ul id="list" class="list"></ul>
-      <p id="empty" class="empty muted" hidden>Nothing here yet.</p>
-    </section>
+  <!-- Settings -->
+  <section id="settings-view" hidden>
+    <span class="pill">You</span>
+    <h1>Settings</h1>
+    <p class="lead">Signed in as <strong id="me-name"></strong>.</p>
 
-    <!-- Settings / notifications -->
-    <section id="settings-view" class="card" hidden>
+    <div class="card">
       <h2>Notifications</h2>
       <p class="muted">Turn this on on the phone that should get pinged when a wish is added.</p>
       <p id="push-status" class="status"></p>
       <div class="row">
-        <button id="push-btn" type="button" class="primary">🔔 Notify me on this device</button>
-        <button id="test-btn" type="button">Send test</button>
+        <button id="push-btn" type="button" class="primary">Notify me on this device</button>
+        <button id="test-btn" type="button" class="ghost">Send test</button>
       </div>
       <p id="ios-hint" class="hint" hidden>
         On iPhone: tap <strong>Share → Add to Home Screen</strong>, then open Remindly from the home screen and press the button again.
       </p>
       <p id="telegram-status" class="status"></p>
+    </div>
 
-      <h2>You</h2>
-      <p class="muted">Signed in as <strong id="me-name"></strong>.</p>
+    <div class="card">
+      <h2>Account</h2>
       <div class="row">
-        <button id="change-name-btn" type="button">Change name</button>
-        <button id="logout-btn" type="button">Forget PIN</button>
+        <button id="change-name-btn" type="button" class="ghost">Change name</button>
+        <button id="logout-btn" type="button" class="ghost">Forget PIN</button>
       </div>
-      <button id="close-settings-btn" type="button" class="link">← Back to the list</button>
-    </section>
-  </main>
+    </div>
+  </section>
+
+  <!-- Floating add button -->
+  <button id="fab" class="fab" type="button" aria-label="Add a wish" hidden>
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+
+  <!-- Tab bar -->
+  <nav id="tabbar" class="tabbar" aria-label="Sections" hidden>
+    <button type="button" class="tab active" data-tab="open">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7.5-4.6-9.5-9.3C1.2 8.3 3.6 5 7 5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.8 3.3 4.5 6.7C19.5 16.4 12 21 12 21z"/></svg>
+      <span>Wishes</span>
+    </button>
+    <button type="button" class="tab" data-tab="done">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+      <span>Granted</span>
+    </button>
+    <button type="button" class="tab" data-tab="settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- Add wish sheet -->
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <form id="add-form" class="sheet-panel" aria-label="Add a wish">
+      <div class="grabber"></div>
+      <h2>New wish</h2>
+      <input id="title-input" type="text" maxlength="140" placeholder="I want…" required autocomplete="off" />
+      <div class="label">How badly?</div>
+      <div class="urgency-picker" role="radiogroup" aria-label="How badly?">
+        <label><input type="radio" name="urgency" value="low" /><span>🙂 Whenever</span></label>
+        <label><input type="radio" name="urgency" value="medium" checked /><span>🙏 Soon-ish</span></label>
+        <label><input type="radio" name="urgency" value="high" /><span>🔥 Really want</span></label>
+        <label><input type="radio" name="urgency" value="urgent" /><span>🚨 NEED IT</span></label>
+      </div>
+      <input id="note-input" type="text" maxlength="500" placeholder="Note (size, colour, why…)" />
+      <input id="link-input" type="url" maxlength="500" placeholder="Link (optional)" />
+      <div class="row">
+        <button type="button" class="ghost" data-close>Cancel</button>
+        <button type="submit" class="primary">Add wish</button>
+      </div>
+    </form>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="/app.js" type="module"></script>
