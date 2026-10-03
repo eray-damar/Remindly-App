@@ -5,6 +5,7 @@ export const POINTS = { low: 10, medium: 20, high: 35, urgent: 50 };
 export const TRAVEL_MULTIPLIER = 2;
 export const QUICK_DAYS = 3; // grant within this many days of adding -> bonus
 export const QUICK_BONUS = 10;
+export const SUPPORT_POINTS = 15; // replying to the other side's check-in
 
 export const LEVELS = [
   { level: 1, min: 0, title: "Newbie" },
@@ -26,6 +27,7 @@ export const BADGES = [
   { id: "nest", name: "Nest builder", icon: "armchair", desc: "Finish a home idea" },
   { id: "hattrick", name: "Hat-trick", icon: "medal", desc: "Grant 3 wishes in one day" },
   { id: "streak3", name: "On a roll", icon: "calendar-check", desc: "3 weeks in a row" },
+  { id: "harbour", name: "Safe harbour", icon: "hand-heart", desc: "Reply to 5 check-ins" },
 ];
 
 const ROLES = ["her", "him"];
@@ -93,8 +95,13 @@ function dayKey(iso) {
   return new Date(iso).toISOString().slice(0, 10);
 }
 
-/** Scores for both sides, derived from items. */
-export function computeScores(items, now = new Date()) {
+/** A reply to the other side's check-in is a support moment worth points. */
+export function isSupport(moment) {
+  return Boolean(moment.type === "checkin" && moment.response && moment.response.role && moment.role && moment.response.role !== moment.role && ROLES.includes(moment.response.role));
+}
+
+/** Scores for both sides, derived from items (and support moments). */
+export function computeScores(items, moments = [], now = new Date()) {
   const monthKey = now.toISOString().slice(0, 7);
   const result = {};
   for (const role of ROLES) {
@@ -102,8 +109,13 @@ export function computeScores(items, now = new Date()) {
       .filter((i) => isGrant(i) && i.doneBy === role)
       .map((i) => ({ ...i, points: pointsFor(i) }))
       .sort((a, b) => new Date(b.doneAt) - new Date(a.doneAt));
-    const points = grants.reduce((s, g) => s + g.points, 0);
-    const month = grants.filter((g) => g.doneAt.slice(0, 7) === monthKey).reduce((s, g) => s + g.points, 0);
+    const supports = moments
+      .filter((m) => isSupport(m) && m.response.role === role)
+      .map((m) => ({ id: m.id, title: m.response.text || "Was there for them", category: "support", urgency: "medium", points: SUPPORT_POINTS, doneAt: m.response.at, createdAt: m.createdAt, addedBy: m.name }))
+      .sort((a, b) => new Date(b.doneAt) - new Date(a.doneAt));
+    const all = [...grants, ...supports].sort((a, b) => new Date(b.doneAt) - new Date(a.doneAt));
+    const points = all.reduce((s, g) => s + g.points, 0);
+    const month = all.filter((g) => g.doneAt.slice(0, 7) === monthKey).reduce((s, g) => s + g.points, 0);
     const perDay = {};
     for (const g of grants) perDay[dayKey(g.doneAt)] = (perDay[dayKey(g.doneAt)] || 0) + 1;
     const streak = streakWeeks(grants.map((g) => g.doneAt), now);
@@ -117,6 +129,7 @@ export function computeScores(items, now = new Date()) {
       nest: grants.some((g) => g.category === "home"),
       hattrick: Object.values(perDay).some((n) => n >= 3),
       streak3: streak >= 3,
+      harbour: supports.length >= 5,
     };
     // Last name this side used when adding something, for display.
     const named = items.filter((i) => i.role === role && i.addedBy).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -126,10 +139,11 @@ export function computeScores(items, now = new Date()) {
       points,
       month,
       grants: grants.length,
+      supports: supports.length,
       streak,
       ...levelFor(points),
       badges: BADGES.map((b) => ({ ...b, earned: Boolean(have[b.id]) })),
-      recent: grants.slice(0, 8).map((g) => ({ id: g.id, title: g.title, category: g.category, urgency: g.urgency, points: g.points, doneAt: g.doneAt, addedBy: g.addedBy })),
+      recent: all.slice(0, 8).map((g) => ({ id: g.id, title: g.title, category: g.category, urgency: g.urgency, points: g.points, doneAt: g.doneAt, addedBy: g.addedBy })),
     };
   }
   return result;

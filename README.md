@@ -56,6 +56,17 @@ Do this on each phone:
 
 From then on, whatever she adds pings his phone and whatever he adds pings hers. You can change your side later under Settings → *Change who I am*.
 
+## Support
+
+A small space for emotional support, separate from the lists:
+
+- **Check-in:** pick how you feel (Great / Good / Meh / Low / Overwhelmed), tap what would help ("A hug", "Some space", "Just a text"…), add a line if you like. The other side gets a push.
+- **Notes:** send a few words of encouragement. Quick prompts included.
+- **Quick replies:** the other side can answer a check-in or note with one tap ("I'm here 💛", "On my way"…). Replying to a check-in earns 15 points and counts toward the *Safe harbour* badge. Replying to a note is free, so there is no incentive to spam.
+- Moments live in `DATA_DIR/moments.json` (last 500).
+
+Settings moved to the gear button in the top-right corner.
+
 ## The game
 
 Granting the *other* person's wishes earns points. Ticking your own items earns nothing, so the only way to score is to make your partner happy.
@@ -71,7 +82,7 @@ Travel ideas count double. Granting within 3 days of it being added earns a +10 
 
 - **Levels:** Newbie → Sweetheart (100) → Thoughtful (250) → Attentive (500) → Mind reader (900) → Wish genie (1500) → Legend (2500).
 - **Streak:** consecutive weeks with at least one grant.
-- **Badges:** First spark, Giver (5), Wish genie (10), Firefighter (grant a NEED IT), Lightning (within 24 h), Globetrotter (travel), Nest builder (home), Hat-trick (3 in one day), On a roll (3-week streak).
+- **Badges:** First spark, Giver (5), Wish genie (10), Firefighter (grant a NEED IT), Lightning (within 24 h), Globetrotter (travel), Nest builder (home), Hat-trick (3 in one day), On a roll (3-week streak), Safe harbour (reply to 5 check-ins).
 - The **Score** tab shows the head-to-head, your level, badges and the recent grants feed. The person whose wish was granted gets a notification, and both get one on a level-up.
 
 Scores are derived from the items every time (`GET /api/score`), nothing is stored separately. The rules live in `game.js`.
@@ -107,6 +118,10 @@ All routes except `GET /api/config` require the `x-pin` header when `APP_PIN` is
 | `POST` | `/api/items` | `{ title, urgency, category?, role?, note?, link?, addedBy? }` |
 | `PATCH` | `/api/items/:id` | any of `{ done, urgency, title, note, link }` plus `role` / `actorName` of who is ticking it off; returns the item with `earned` points and `levelUp` |
 | `GET` | `/api/score` | – (both sides' points, level, streak, badges, recent grants) |
+| `GET` | `/api/support` | – (latest 50 moments) |
+| `POST` | `/api/support/checkin` | `{ mood, needs?, text?, role, name }` |
+| `POST` | `/api/support/note` | `{ text, role, name }` |
+| `POST` | `/api/support/:id/reply` | `{ text, role, name }` (once, other side only) |
 | `DELETE` | `/api/items/:id` | – |
 | `POST` | `/api/subscribe` | a `PushSubscription` JSON plus `role` |
 | `DELETE` | `/api/subscribe` | `{ endpoint }` |

@@ -11,7 +11,8 @@ const CATEGORY_UI = {
   home: { icon: "armchair", title: "Home", pill: "Furniture & home", lead: "Ideas for our place, big and small.", placeholder: "Something for our place…", sheet: "New home idea", submit: "Add idea", progress: "Home ideas done", unit: "idea", units: "ideas", done: "Done", doneVerb: "done", emptyOpen: "No home ideas yet. Tap + to add one.", emptyDone: "Nothing done yet." },
 };
 const ROLE_LABEL = { her: "Her", him: "Him" };
-const CATEGORY_ICON = { wish: "heart", travel: "plane", home: "armchair" };
+const CATEGORY_ICON = { wish: "heart", travel: "plane", home: "armchair", support: "hand-heart" };
+const MOOD_ICON = { great: "sun", good: "smile", meh: "meh", low: "cloud-rain", overwhelmed: "cloud-lightning" };
 const otherRole = (r) => (r === "her" ? "him" : r === "him" ? "her" : null);
 
 const $ = (sel) => document.querySelector(sel);
@@ -20,6 +21,7 @@ const views = {
   name: $("#name-view"),
   main: $("#main-view"),
   score: $("#score-view"),
+  support: $("#support-view"),
   settings: $("#settings-view"),
 };
 
@@ -34,6 +36,8 @@ const state = {
   role: localStorage.getItem("remindly.role") || "",
   pushSubscription: null,
   score: null,
+  moments: [],
+  needs: new Set(),
 };
 
 /** Points the current user would earn by granting this item (mirrors game.js). */
@@ -65,8 +69,9 @@ function confetti() {
 // ---------- helpers ----------
 function show(view) {
   for (const [key, el] of Object.entries(views)) el.hidden = key !== view;
-  const inApp = view === "main" || view === "settings" || view === "score";
+  const inApp = view === "main" || view === "settings" || view === "score" || view === "support";
   $("#tabbar").hidden = !inApp;
+  $("#settings-btn").hidden = !inApp || view === "settings";
   $("#fab").hidden = view !== "main";
   window.scrollTo({ top: 0 });
 }
@@ -410,6 +415,134 @@ $("#list").addEventListener("change", async (e) => {
   }
 });
 
+// ---------- support ----------
+function chipHtml(label, on = false) {
+  return `<button type="button" class="chip ${on ? "on" : ""}" data-chip="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
+}
+
+function renderSupportChips() {
+  const sp = state.config.support;
+  $("#needs-chips").innerHTML = sp.needs.map((n) => chipHtml(n, state.needs.has(n))).join("");
+  $("#note-chips").innerHTML = sp.notePrompts.map((n) => chipHtml(n)).join("");
+}
+
+function renderMoments() {
+  const sp = state.config.support;
+  const list = $("#moments");
+  const rows = state.moments.slice(0, 20);
+  list.innerHTML = rows
+    .map((m) => {
+      const mine = m.role === state.role;
+      const isCheckin = m.type === "checkin";
+      const mood = isCheckin ? sp.moods[m.mood] : null;
+      const title = isCheckin
+        ? `${escapeHtml(m.name)} ${mine ? "felt" : "is feeling"} ${escapeHtml((mood?.label || m.mood).toLowerCase())}`
+        : `Note from ${escapeHtml(m.name)}`;
+      const iconName = isCheckin ? MOOD_ICON[m.mood] || "meh" : "message-circle-heart";
+      const canReply = !mine && !m.response;
+      return `
+      <li data-id="${m.id}">
+        <div class="moment-head">
+          <div class="moment-icon ${isCheckin ? m.mood : "note"}">${icon(iconName, "18px")}</div>
+          <div>
+            <div class="moment-title">${title}</div>
+            <div class="moment-sub"><span class="who ${m.role}">${escapeHtml(m.name)}</span> · ${timeAgo(m.createdAt)}</div>
+          </div>
+        </div>
+        ${isCheckin && m.needs?.length ? `<div class="moment-needs">${m.needs.map((n) => `<span>${escapeHtml(n)}</span>`).join("")}</div>` : ""}
+        ${m.text ? `<p class="moment-text">${escapeHtml(m.text)}</p>` : ""}
+        ${m.response ? `<div class="moment-reply">${icon("reply", "15px")}<div>${escapeHtml(m.response.text)}<small><span class="who ${m.response.role}">${escapeHtml(m.response.name)}</span> · ${timeAgo(m.response.at)}</small></div></div>` : ""}
+        ${canReply ? `<div class="reply-chips">${sp.replies.map((r) => `<button type="button" class="chip" data-reply="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("")}</div>` : ""}
+      </li>`;
+    })
+    .join("");
+  $("#moments-empty").hidden = rows.length > 0;
+}
+
+async function renderSupport() {
+  renderSupportChips();
+  state.moments = await api("/support");
+  renderMoments();
+}
+
+$("#needs-chips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-chip]");
+  if (!b) return;
+  const n = b.dataset.chip;
+  state.needs.has(n) ? state.needs.delete(n) : state.needs.add(n);
+  b.classList.toggle("on", state.needs.has(n));
+});
+
+$("#note-chips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-chip]");
+  if (!b) return;
+  $("#note-text").value = b.dataset.chip;
+  $("#note-text").focus();
+});
+
+$("#checkin-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const mood = form.mood.value;
+  if (!mood) return toast("Pick how you're feeling first");
+  const btn = form.querySelector("button[type=submit]");
+  btn.disabled = true;
+  try {
+    const m = await api("/support/checkin", { method: "POST", body: { mood, needs: [...state.needs], text: $("#checkin-text").value, role: state.role, name: state.name } });
+    state.moments.unshift(m);
+    form.reset();
+    state.needs.clear();
+    renderSupportChips();
+    renderMoments();
+    toast("Sent. They'll get a nudge 💛");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#note-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("#note-text").value.trim();
+  if (!text) return toast("Write a few words first");
+  const btn = e.currentTarget.querySelector("button[type=submit]");
+  btn.disabled = true;
+  try {
+    const m = await api("/support/note", { method: "POST", body: { text, role: state.role, name: state.name } });
+    state.moments.unshift(m);
+    $("#note-text").value = "";
+    renderMoments();
+    toast("Note sent 💌");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#moments").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-reply]");
+  if (!b) return;
+  const id = b.closest("li").dataset.id;
+  try {
+    const r = await api(`/support/${id}/reply`, { method: "POST", body: { text: b.dataset.reply, role: state.role, name: state.name } });
+    const { earned, levelUp, ...m } = r;
+    const idx = state.moments.findIndex((x) => x.id === id);
+    if (idx >= 0) state.moments[idx] = m;
+    renderMoments();
+    if (earned > 0) {
+      confetti();
+      toast(levelUp ? `🏆 +${earned} pts · Level ${levelUp.level}: ${levelUp.title}!` : `💛 +${earned} pts for being there`, 3000);
+    } else {
+      toast("Sent 💛");
+    }
+    state.score = null;
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
 async function renderScore() {
   const data = await api("/score");
   state.score = data;
@@ -467,6 +600,9 @@ document.querySelectorAll(".tabbar .tab").forEach((t) =>
     } else if (state.tab === "score") {
       show("score");
       try { await renderScore(); } catch (err) { if (err.message !== "pin") toast(err.message); }
+    } else if (state.tab === "support") {
+      show("support");
+      try { await renderSupport(); } catch (err) { if (err.message !== "pin") toast(err.message); }
     } else {
       state.status = "open";
       show("main");
@@ -486,6 +622,19 @@ $("#who-seg").addEventListener("click", (e) => {
   if (!b) return;
   state.who = b.dataset.who;
   render();
+});
+
+async function openSettings() {
+  $("#me-name").textContent = state.name;
+  $("#me-role").textContent = ROLE_LABEL[state.role] || "no side picked";
+  document.querySelectorAll(".tabbar .tab").forEach((t) => t.classList.remove("active"));
+  show("settings");
+  await updatePushStatus();
+}
+$("#settings-btn").addEventListener("click", openSettings);
+$("#settings-back").addEventListener("click", () => {
+  state.tab = CATEGORY_UI[state.tab] || state.tab === "score" || state.tab === "support" ? state.tab : "wish";
+  document.querySelector(`.tabbar .tab[data-tab="${state.tab}"]`)?.click();
 });
 
 $("#push-btn").addEventListener("click", togglePush);
@@ -514,6 +663,7 @@ setInterval(() => {
   if (document.visibilityState !== "visible") return;
   if (!views.main.hidden) refresh();
   else if (!views.score.hidden) renderScore().catch(() => {});
+  else if (!views.support.hidden) api("/support").then((m) => { state.moments = m; renderMoments(); }).catch(() => {});
 }, 30_000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !views.main.hidden) refresh(); });
 
@@ -525,12 +675,14 @@ async function boot() {
   if (state.config.pinRequired && !state.pin) return show("pin");
   if (!state.name || !state.role) return show("name");
   if (location.hash === "#score") state.tab = "score";
+  if (location.hash === "#support") state.tab = "support";
   state.tab = state.tab === "settings" ? "wish" : state.tab;
   setActiveTab();
-  if (state.tab === "score") {
-    show("score");
+  if (state.tab === "score" || state.tab === "support") {
+    const tab = state.tab;
+    show(tab);
     history.replaceState(null, "", "/");
-    await renderScore();
+    await (tab === "score" ? renderScore() : renderSupport());
     return;
   }
   show("main");

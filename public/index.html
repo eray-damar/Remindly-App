@@ -25,6 +25,8 @@
     <span class="blob b3"></span>
   </div>
 
+  <button id="settings-btn" class="gear" type="button" aria-label="Settings" hidden><i data-icon="settings-2" data-size="20"></i></button>
+
   <!-- PIN gate -->
   <section id="pin-view" class="gate" hidden>
     <span class="pill"><i data-icon="lock" data-size="13"></i> Private</span>
@@ -85,6 +87,42 @@
     <p id="empty" class="empty" hidden></p>
   </section>
 
+  <!-- Support -->
+  <section id="support-view" hidden>
+    <span class="pill"><i data-icon="hand-heart" data-size="13"></i> Here for each other</span>
+    <h1>Support</h1>
+    <p class="lead">Say how you're doing. The other one gets a gentle nudge.</p>
+
+    <form id="checkin-form" class="card">
+      <h2>How are you right now?</h2>
+      <div class="moods" role="radiogroup" aria-label="Mood">
+        <label><input type="radio" name="mood" value="great" /><span><i data-icon="sun" data-size="22"></i>Great</span></label>
+        <label><input type="radio" name="mood" value="good" /><span><i data-icon="smile" data-size="22"></i>Good</span></label>
+        <label><input type="radio" name="mood" value="meh" /><span><i data-icon="meh" data-size="22"></i>Meh</span></label>
+        <label><input type="radio" name="mood" value="low" /><span><i data-icon="cloud-rain" data-size="22"></i>Low</span></label>
+        <label><input type="radio" name="mood" value="overwhelmed" /><span><i data-icon="cloud-lightning" data-size="22"></i>Overwhelmed</span></label>
+      </div>
+      <div class="label">What would help?</div>
+      <div class="chips" id="needs-chips"></div>
+      <input id="checkin-text" type="text" maxlength="500" placeholder="Anything you want to say (optional)" />
+      <button type="submit" class="primary"><i data-icon="send" data-size="18"></i> Send check-in</button>
+    </form>
+
+    <form id="note-form" class="card">
+      <h2>Send a little note</h2>
+      <div class="chips" id="note-chips"></div>
+      <input id="note-text" type="text" maxlength="500" placeholder="Or write your own…" />
+      <button type="submit" class="ghost"><i data-icon="message-circle-heart" data-size="18"></i> Send note</button>
+    </form>
+
+    <div class="card">
+      <h2>Recent moments</h2>
+      <ul class="moments" id="moments"></ul>
+      <p class="muted" id="moments-empty" hidden>Nothing yet. A check-in or a note is a good place to start.</p>
+    </div>
+    <p class="footnote">This is for the two of you. If things feel heavier than usual, reaching out to a professional or a helpline is a strong move, not a weak one.</p>
+  </section>
+
   <!-- Score -->
   <section id="score-view" hidden>
     <span class="pill"><i data-icon="trophy" data-size="13"></i> Scoreboard</span>
@@ -132,6 +170,7 @@
 
   <!-- Settings -->
   <section id="settings-view" hidden>
+    <button type="button" class="link back" id="settings-back"><i data-icon="arrow-left" data-size="16"></i> Back</button>
     <span class="pill"><i data-icon="user-round" data-size="13"></i> You</span>
     <h1>Settings</h1>
     <p class="lead">Signed in as <strong id="me-name"></strong> (<span id="me-role"></span>).</p>
@@ -178,14 +217,15 @@
       <i data-icon="armchair" data-size="24"></i>
       <span>Home</span>
     </button>
+    <button type="button" class="tab" data-tab="support">
+      <i data-icon="hand-heart" data-size="24"></i>
+      <span>Support</span>
+    </button>
     <button type="button" class="tab" data-tab="score">
       <i data-icon="trophy" data-size="24"></i>
       <span>Score</span>
     </button>
-    <button type="button" class="tab" data-tab="settings">
-      <i data-icon="settings-2" data-size="24"></i>
-      <span>Settings</span>
-    </button>
+
   </nav>
 
   <!-- Add wish sheet -->

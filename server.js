@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeScores, pointsFor, levelFor, POINTS, TRAVEL_MULTIPLIER, QUICK_DAYS, QUICK_BONUS, LEVELS, BADGES } from "./game.js";
+import { computeScores, pointsFor, levelFor, POINTS, TRAVEL_MULTIPLIER, QUICK_DAYS, QUICK_BONUS, SUPPORT_POINTS, LEVELS, BADGES } from "./game.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +35,17 @@ export const CATEGORIES = {
   travel: { label: "Travel ideas", emoji: "✈️", verb: "wants to go", doneLabel: "Been there" },
   home: { label: "Home ideas", emoji: "🛋️", verb: "wants for home", doneLabel: "Got it" },
 };
+
+export const MOODS = {
+  great: { label: "Great", emoji: "☀️" },
+  good: { label: "Good", emoji: "🙂" },
+  meh: { label: "Meh", emoji: "😐" },
+  low: { label: "Low", emoji: "🌧️" },
+  overwhelmed: { label: "Overwhelmed", emoji: "⛈️" },
+};
+export const NEEDS = ["A hug", "Listen to me", "Some space", "Distract me", "Dinner together", "Just a text", "Tell me it's okay"];
+export const NOTE_PROMPTS = ["Proud of you", "Thinking of you", "You've got this", "Miss you", "Thank you for today"];
+export const REPLIES = ["I'm here 💛", "Hug incoming", "On my way", "Call you in 5", "Take all the time you need"];
 
 export const ROLES = ["her", "him"];
 const otherRole = (role) => (role === "her" ? "him" : role === "him" ? "her" : null);
@@ -68,8 +79,10 @@ function saveJson(name, value) {
 }
 
 let items = loadJson("items.json", []);
+let moments = loadJson("moments.json", []);
 let subscriptions = loadJson("subscriptions.json", []);
 const saveItems = () => saveJson("items.json", items);
+const saveMoments = () => saveJson("moments.json", moments);
 const saveSubscriptions = () => saveJson("subscriptions.json", subscriptions);
 
 // ---------- notifications ----------
@@ -176,7 +189,8 @@ app.get("/api/config", (_req, res) => {
     urgency: URGENCY,
     categories: CATEGORIES,
     roles: ROLES,
-    game: { points: POINTS, travelMultiplier: TRAVEL_MULTIPLIER, quickDays: QUICK_DAYS, quickBonus: QUICK_BONUS, levels: LEVELS, badges: BADGES },
+    game: { points: POINTS, travelMultiplier: TRAVEL_MULTIPLIER, quickDays: QUICK_DAYS, quickBonus: QUICK_BONUS, supportPoints: SUPPORT_POINTS, levels: LEVELS, badges: BADGES },
+    support: { moods: MOODS, needs: NEEDS, notePrompts: NOTE_PROMPTS, replies: REPLIES },
   });
 });
 
@@ -193,7 +207,77 @@ app.get("/api/items", (_req, res) => {
 });
 
 app.get("/api/score", (_req, res) => {
-  res.json(computeScores(items));
+  res.json(computeScores(items, moments));
+});
+
+// ---------- emotional support ----------
+app.get("/api/support", (_req, res) => {
+  res.json(moments.slice(0, 50));
+});
+
+function newMoment(req, type) {
+  const role = String(req.body?.role ?? "");
+  if (!ROLES.includes(role)) return { error: "pick a side first" };
+  return {
+    id: randomUUID(),
+    type,
+    role,
+    name: String(req.body?.name ?? "").trim().slice(0, 40) || (role === "her" ? "She" : "He"),
+    createdAt: new Date().toISOString(),
+    response: null,
+  };
+}
+
+app.post("/api/support/checkin", (req, res) => {
+  const m = newMoment(req, "checkin");
+  if (m.error) return res.status(400).json(m);
+  const mood = String(req.body?.mood ?? "");
+  if (!MOODS[mood]) return res.status(400).json({ error: "unknown mood" });
+  const needs = Array.isArray(req.body?.needs) ? req.body.needs.map((n) => String(n).trim().slice(0, 40)).filter(Boolean).slice(0, 5) : [];
+  const text = String(req.body?.text ?? "").trim().slice(0, 500);
+  Object.assign(m, { mood, needs, text });
+  moments.unshift(m);
+  moments = moments.slice(0, 500);
+  saveMoments();
+  const body = [needs.length ? `Would help: ${needs.join(", ")}` : "", text].filter(Boolean).join(" · ") || "Tap to reply.";
+  notify({ title: `${MOODS[mood].emoji} ${m.name} is feeling ${MOODS[mood].label.toLowerCase()}`, body, url: "/#support", tag: `moment-${m.id}`, toRole: otherRole(m.role) });
+  res.status(201).json(m);
+});
+
+app.post("/api/support/note", (req, res) => {
+  const m = newMoment(req, "note");
+  if (m.error) return res.status(400).json(m);
+  const text = String(req.body?.text ?? "").trim().slice(0, 500);
+  if (!text) return res.status(400).json({ error: "write something" });
+  m.text = text;
+  moments.unshift(m);
+  moments = moments.slice(0, 500);
+  saveMoments();
+  notify({ title: `💌 Note from ${m.name}`, body: text, url: "/#support", tag: `moment-${m.id}`, toRole: otherRole(m.role) });
+  res.status(201).json(m);
+});
+
+app.post("/api/support/:id/reply", (req, res) => {
+  const m = moments.find((x) => x.id === req.params.id);
+  if (!m) return res.status(404).json({ error: "not found" });
+  const role = String(req.body?.role ?? "");
+  if (!ROLES.includes(role)) return res.status(400).json({ error: "pick a side first" });
+  if (role === m.role) return res.status(400).json({ error: "you can't reply to yourself" });
+  if (m.response) return res.status(409).json({ error: "already replied" });
+  const text = String(req.body?.text ?? "").trim().slice(0, 300);
+  if (!text) return res.status(400).json({ error: "write something" });
+  const name = String(req.body?.name ?? "").trim().slice(0, 40) || (role === "her" ? "She" : "He");
+  const before = levelFor(computeScores(items, moments)[role].points);
+  m.response = { role, name, text, at: new Date().toISOString() };
+  saveMoments();
+  const earned = m.type === "checkin" ? SUPPORT_POINTS : 0;
+  const after = levelFor(computeScores(items, moments)[role].points);
+  const levelUp = after.level > before.level ? { level: after.level, title: after.title } : null;
+  notify({ title: `💛 ${name}: ${text}`, body: m.type === "checkin" ? "Replying to your check-in." : "Replying to your note.", url: "/#support", tag: `moment-${m.id}`, toRole: m.role });
+  if (levelUp) {
+    notify({ title: `🏆 ${name} reached level ${levelUp.level}: ${levelUp.title}`, body: `${after.points} points and counting.`, url: "/#score", tag: "level-up", toRole: role });
+  }
+  res.json({ ...m, earned, levelUp });
 });
 
 app.post("/api/items", (req, res) => {
@@ -245,7 +329,7 @@ app.patch("/api/items/:id", (req, res) => {
   let earned = 0;
   let levelUp = null;
   if (typeof done === "boolean" && done !== item.done) {
-    const before = actor ? levelFor(computeScores(items)[actor].points) : null;
+    const before = actor ? levelFor(computeScores(items, moments)[actor].points) : null;
     item.done = done;
     item.doneAt = done ? new Date().toISOString() : null;
     item.doneBy = done ? actor : null;
@@ -254,7 +338,7 @@ app.patch("/api/items/:id", (req, res) => {
       const actorName = req.body?.actorName ? String(req.body.actorName).trim().slice(0, 40) : (actor === "her" ? "She" : actor === "him" ? "He" : "Someone");
       const c = CATEGORIES[item.category] || CATEGORIES.wish;
       if (earned > 0) {
-        const after = levelFor(computeScores(items)[actor].points);
+        const after = levelFor(computeScores(items, moments)[actor].points);
         if (before && after.level > before.level) levelUp = { level: after.level, title: after.title };
         // Tell the person whose wish it was.
         notify({

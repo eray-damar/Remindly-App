@@ -90,7 +90,7 @@ test("create, validate, update, sort by urgency, delete", async () => {
   assert.equal((await j("/api/items", { method: "POST", body: JSON.stringify({ title: "x", category: "cars" }) })).status, 400);
   assert.equal((await j("/api/items", { method: "POST", body: JSON.stringify({ title: "x", role: "them" }) })).status, 400);
 
-  const a = await j("/api/items", { method: "POST", body: JSON.stringify({ title: "Socks", urgency: "low", addedBy: "Ana", role: "her" }) });
+  const a = await j("/api/items", { method: "POST", body: JSON.stringify({ title: "Socks", urgency: "low", addedBy: "Geane", role: "her" }) });
   assert.equal(a.status, 201);
   assert.equal(a.body.done, false);
   assert.equal(a.body.category, "wish"); // default
@@ -205,6 +205,55 @@ test("push: her phone hears about his wishes and vice versa; expired subscriptio
   await waitFor(() => pushHits === 2);
   await waitFor(() => JSON.parse(readFileSync(join(dataDir, "subscriptions.json"), "utf8")).length === 0);
   assert.equal(JSON.parse(readFileSync(join(dataDir, "subscriptions.json"), "utf8")).length, 0);
+});
+
+test("support: check-ins and notes reach the other side; replies earn support points", async () => {
+  assert.equal((await j("/api/support/checkin", { method: "POST", body: JSON.stringify({ mood: "low" }) })).status, 400); // no side
+  assert.equal((await j("/api/support/checkin", { method: "POST", body: JSON.stringify({ mood: "sleepy", role: "her" }) })).status, 400);
+  assert.equal((await j("/api/support/note", { method: "POST", body: JSON.stringify({ text: "  ", role: "her" }) })).status, 400);
+
+  const herPhone = fakeSubscription("/push/her-2", "her");
+  const hisPhone = fakeSubscription("/push/his-2", "him");
+  await j("/api/subscribe", { method: "POST", body: JSON.stringify(herPhone) });
+  await j("/api/subscribe", { method: "POST", body: JSON.stringify(hisPhone) });
+
+  pushMode = "ok"; pushHits = 0; pushUrls = [];
+  const c = await j("/api/support/checkin", { method: "POST", body: JSON.stringify({ mood: "low", needs: ["A hug", "Listen to me"], text: "rough day", role: "her", name: "Geane" }) });
+  assert.equal(c.status, 201);
+  assert.equal(c.body.type, "checkin");
+  assert.deepEqual(c.body.needs, ["A hug", "Listen to me"]);
+  await waitFor(() => pushHits === 1);
+  await new Promise((r) => setTimeout(r, 150));
+  assert.deepEqual(pushUrls, ["/push/his-2"]); // only his phone is nudged
+
+  // She can't reply to herself; he can, once, and it tells her phone.
+  assert.equal((await j(`/api/support/${c.body.id}/reply`, { method: "POST", body: JSON.stringify({ text: "hi", role: "her" }) })).status, 400);
+  pushHits = 0; pushUrls = [];
+  const r = await j(`/api/support/${c.body.id}/reply`, { method: "POST", body: JSON.stringify({ text: "I'm here 💛", role: "him", name: "Eray" }) });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.earned, 15);
+  assert.equal(r.body.response.role, "him");
+  await waitFor(() => pushHits === 1);
+  await new Promise((res) => setTimeout(res, 150));
+  assert.deepEqual(pushUrls, ["/push/her-2"]);
+  assert.equal((await j(`/api/support/${c.body.id}/reply`, { method: "POST", body: JSON.stringify({ text: "again", role: "him" }) })).status, 409);
+
+  // Notes go to the other side; replying to a note is free.
+  pushHits = 0; pushUrls = [];
+  const n = await j("/api/support/note", { method: "POST", body: JSON.stringify({ text: "Proud of you", role: "him", name: "Eray" }) });
+  assert.equal(n.status, 201);
+  await waitFor(() => pushHits === 1);
+  assert.deepEqual(pushUrls, ["/push/her-2"]);
+  const nr = await j(`/api/support/${n.body.id}/reply`, { method: "POST", body: JSON.stringify({ text: "🥹", role: "her", name: "Geane" }) });
+  assert.equal(nr.body.earned, 0);
+
+  const list = (await j("/api/support")).body;
+  assert.equal(list.length, 2);
+  assert.equal(list[0].type, "note"); // newest first
+  const score = (await j("/api/score")).body;
+  assert.equal(score.him.supports, 1);
+  assert.ok(score.him.points >= 15);
+  assert.equal(score.him.recent.find((x) => x.category === "support").points, 15);
 });
 
 async function waitFor(fn, ms = 3000) {

@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pointsFor, isGrant, levelFor, streakWeeks, computeScores } from "../game.js";
+import { pointsFor, isGrant, levelFor, streakWeeks, computeScores, isSupport, SUPPORT_POINTS } from "../game.js";
 
-const base = { id: "1", title: "x", category: "wish", urgency: "high", role: "her", addedBy: "Ana", done: true, doneBy: "him", createdAt: "2026-09-01T10:00:00Z", doneAt: "2026-09-10T10:00:00Z" };
+const base = { id: "1", title: "x", category: "wish", urgency: "high", role: "her", addedBy: "Geane", done: true, doneBy: "him", createdAt: "2026-09-01T10:00:00Z", doneAt: "2026-09-10T10:00:00Z" };
 
 test("only ticking the other side's item is a grant", () => {
   assert.equal(isGrant(base), true);
@@ -43,9 +43,9 @@ test("computeScores aggregates per side with badges and recent feed", () => {
     { ...base, id: "4", role: "him", addedBy: "Eray", doneBy: "her", urgency: "low", createdAt: "2026-09-30T00:00:00Z", doneAt: "2026-09-30T05:00:00Z" },
     { ...base, id: "5", done: false, doneBy: null, doneAt: null },
   ];
-  const s = computeScores(items, new Date("2026-09-30T12:00:00Z"));
+  const s = computeScores(items, [], new Date("2026-09-30T12:00:00Z"));
   assert.equal(s.him.name, "Eray");
-  assert.equal(s.her.name, "Ana");
+  assert.equal(s.her.name, "Geane");
   assert.equal(s.him.points, 35 + 50 + 40);
   assert.equal(s.him.grants, 3);
   assert.equal(s.him.title, "Sweetheart");
@@ -55,4 +55,21 @@ test("computeScores aggregates per side with badges and recent feed", () => {
   assert.equal(s.her.points, 20); // low + quick bonus, lightning badge
   assert.ok(s.her.badges.find((b) => b.id === "lightning").earned);
   assert.equal(s.her.recent[0].title, "x");
+});
+
+test("replying to the other side's check-in earns support points and the harbour badge", () => {
+  const checkin = (i, by, replyBy) => ({ id: `m${i}`, type: "checkin", role: by, name: by === "her" ? "Geane" : "Eray", mood: "low", needs: ["A hug"], text: "", createdAt: "2026-09-20T10:00:00Z", response: replyBy ? { role: replyBy, name: "x", text: "I'm here", at: `2026-09-2${i}T11:00:00Z` } : null });
+  assert.equal(isSupport(checkin(1, "her", "him")), true);
+  assert.equal(isSupport(checkin(1, "her", "her")), false);
+  assert.equal(isSupport(checkin(1, "her", null)), false);
+  assert.equal(isSupport({ ...checkin(1, "her", "him"), type: "note" }), false); // replies to notes are free
+
+  const moments = [1, 2, 3, 4, 5].map((i) => checkin(i, "her", "him"));
+  const s = computeScores([], moments, new Date("2026-09-30T12:00:00Z"));
+  assert.equal(s.him.points, 5 * SUPPORT_POINTS);
+  assert.equal(s.him.supports, 5);
+  assert.equal(s.him.grants, 0);
+  assert.ok(s.him.badges.find((b) => b.id === "harbour").earned);
+  assert.equal(s.him.recent[0].category, "support");
+  assert.equal(s.her.points, 0);
 });

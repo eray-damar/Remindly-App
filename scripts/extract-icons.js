@@ -14,6 +14,7 @@ const ICONS = [
   "sparkles", "leaf", "clock", "flame", "siren", "lock", "x", "key-round", "party-popper",
   "plane", "armchair", "map-pin", "users-round", "list-checks",
   "trophy", "medal", "zap", "calendar-check", "wand-sparkles", "heart-handshake", "crown", "gift", "swords",
+  "hand-heart", "sun", "smile", "meh", "frown", "cloud-rain", "cloud-lightning", "message-circle-heart", "reply", "arrow-left",
 ];
 
 const res = await fetch(SOURCE);
